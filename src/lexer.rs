@@ -73,6 +73,26 @@ pub fn tokenize(code: String) -> Vec<Token> {
             }
             continue;
         }
+        if char.is_numeric() {
+            let start_pos = lexer.current - char.len_utf8();
+            while lexer.current < lexer.source.len() {
+                let next = lexer.peek();
+                if next.is_numeric() {
+                    lexer.advance();
+                } else {
+                    break;
+                }
+            }   
+            let end_pos = lexer.current;
+            let val = &lexer.source[start_pos..end_pos];
+            token_vec.push(Token::new(
+                TokenType::Number,
+                val,
+                lexer.line,
+                lexer.column,
+            ))
+        }
+        
         match char {
             ' ' | '\n' |  '\r' |  '\t'  => { continue; },
             '@'                     => {
@@ -119,7 +139,7 @@ pub fn tokenize(code: String) -> Vec<Token> {
                     eprintln!("Syntax Error: Unrecognized character for stack point reference '{}'", char);
                 }
             },
-            '+' | '/' | '*' | '=' => {
+            '+' | '/' | '*' | '=' | '-' => {
                 match lexer.peek_next() {
                     '=' => {
                         let comb_string = format!("{char}=");
@@ -187,14 +207,26 @@ pub fn tokenize(code: String) -> Vec<Token> {
                 lexer.column,
             )),
             '(' => token_vec.push(Token::new(
-                TokenType::ParenRight,
+                TokenType::ParenLeft,
                 "(",
                 lexer.line,
                 lexer.column,
             )),
             ')' => token_vec.push(Token::new(
-                TokenType::ParenLeft,
+                TokenType::ParenRight,
                 ")",
+                lexer.line,
+                lexer.column,
+            )),
+            ',' => token_vec.push(Token::new(
+                TokenType::Comma,
+                ",",
+                lexer.line,
+                lexer.column,
+            )),
+            '.' => token_vec.push(Token::new(
+                TokenType::Dot,
+                ".",
                 lexer.line,
                 lexer.column,
             )),

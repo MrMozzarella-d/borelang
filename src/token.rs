@@ -2,11 +2,11 @@ use phf::phf_map;
 
 #[derive(Debug, Copy, Clone)]
 pub enum TokenType {
-    Identifier,
+    Identifier,                 //done
     StackPointReference,        //done
     StackAliasReference,        //done
-    Number,
-    StringLiteral,
+    Number,                     //just this, working on it
+    StringLiteral,              //done
     // operators                //all done
     Equal,
     CompEqual,
@@ -18,7 +18,7 @@ pub enum TokenType {
     MultiplyEqual,
     Divide,
     DivideEqual,
-    // keywords
+    // keywords //all done
     KwIf,
     KwElse,
     KwReturn,
@@ -26,7 +26,7 @@ pub enum TokenType {
     KwProc,
     KwAlias,
     KwAs,
-    // punctuation
+    // punctuation //all done
     BraceLeft,
     BraceRight,
     BracketLeft,
