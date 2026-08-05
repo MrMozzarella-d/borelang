@@ -1,0 +1,4 @@
+proc hello_wordle {
+    @0 = "Hello, world!"
+    print(@0)
+}
