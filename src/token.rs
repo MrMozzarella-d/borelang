@@ -1,12 +1,12 @@
 use phf::phf_map;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TokenType {
-    Identifier,                 //done
-    StackPointReference,        //done
-    StackAliasReference,        //done
-    Number,                     //just this, working on it
-    StringLiteral,              //done
+    Identifier,                
+    StackPointReference,       
+    StackAliasReference,        
+    Number,                     
+    StringLiteral,              
     // operators                //all done
     Equal,
     CompEqual,
@@ -27,22 +27,24 @@ pub enum TokenType {
     KwAlias,
     KwAs,
     // punctuation //all done
-    BraceLeft,
-    BraceRight,
-    BracketLeft,
-    BracketRight,
-    ParenLeft,
-    ParenRight,
+    BraceLeft,      // {
+    BraceRight,     // }
+    BracketLeft,    // [
+    BracketRight,   // ]
+    ParenLeft,      // (
+    ParenRight,     // )
     Comma,
     Colon,
     Dot,
+
+    EOF,
 }
 #[derive(Debug)]
 pub struct  Token {
-    token_type: TokenType,
-    value: String,
-    line: usize,
-    column: usize,
+    pub(crate) token_type: TokenType,
+    pub(crate) value: String,
+    pub(crate) line: usize,
+    pub(crate) column: usize,
 }
 impl Token {
     pub fn new(token_type: TokenType, value: &str, line: usize, column: usize) -> Self {
