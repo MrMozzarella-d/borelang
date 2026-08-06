@@ -3,6 +3,7 @@ proc wordle(cheese_pizza) {
     print(@0)
 }
 
+alias @0 as hi
 @0 = 2
 @0 += 1
 @[hi] = 1

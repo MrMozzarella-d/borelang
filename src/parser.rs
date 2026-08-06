@@ -15,9 +15,12 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self) -> &Token<'a> {
-        let t = self.tokens.get(self.current).unwrap();
-        self.current += 1;
-        t
+        if let Some(t) = self.tokens.get(self.current) {
+            self.current += 1;
+            t
+        } else {
+            &self.tokens[self.tokens.len() - 1] // return eof
+        }
     }
     fn expect(&mut self, expected_type: TokenType) -> Option<&Token<'a>> {
         let token = self.advance();
@@ -29,8 +32,8 @@ impl<'a> Parser<'a> {
     }
     fn peek_expect(&self, expected_type: TokenType) -> Option<&Token<'a>> {
         let token = self.peek();
-        if token.unwrap().token_type != expected_type {
-            eprintln!("Expected type {:?}, got type {:?} at {}:{}", expected_type, token.unwrap().token_type, token.unwrap().line, token.unwrap().column);
+        if token?.token_type != expected_type {
+            eprintln!("Expected type {:?}, got type {:?} at {}:{}", expected_type, token?.token_type, token?.line, token?.column);
             return None
         }
         token
@@ -91,17 +94,17 @@ impl<'a> Parser<'a> {
         match token_type {
             TokenType::KwProc => {
                 self.advance(); // consume proc, to name
-                let name_token = self.expect(TokenType::Identifier).unwrap();
+                let name_token = self.expect(TokenType::Identifier)?;
                 let proc_name = name_token.value;
                 self.expect(TokenType::ParenLeft);
                 let mut params = Vec::new();
                 while self.current < self.tokens.len() {
-                    if self.peek().unwrap().token_type == TokenType::ParenRight {
+                    if self.peek()?.token_type == TokenType::ParenRight {
                         break;
                     }
-                    let param = self.expect(TokenType::Identifier).unwrap();
+                    let param = self.expect(TokenType::Identifier)?;
                     params.push(param.value);
-                    if self.peek().unwrap().token_type == TokenType::Comma {
+                    if self.peek()?.token_type == TokenType::Comma {
                         self.advance();
                     }
                 }
@@ -109,7 +112,7 @@ impl<'a> Parser<'a> {
                 self.expect(TokenType::BraceLeft);
                 let mut body: Vec<Statement<'a>> = Vec::new();
                 while self.current < self.tokens.len() {
-                    if self.peek().unwrap().token_type == TokenType::BraceRight {
+                    if self.peek()?.token_type == TokenType::BraceRight {
                         break;
                     }
                     if let Some(stmt) = self.parse_statement() {
@@ -128,13 +131,13 @@ impl<'a> Parser<'a> {
                 self.expect(TokenType::ParenLeft); // expect it to be a function, we are now on the first letter of the function args
                 let mut expr_vec = Vec::new();
                 while self.current < self.tokens.len() {
-                    if self.peek().unwrap().token_type == TokenType::ParenRight {
+                    if self.peek()?.token_type == TokenType::ParenRight {
                         break;
                     }
-                    let arg_expr = self.parse_expression(0).unwrap();
+                    let arg_expr = self.parse_expression(0)?;
                     expr_vec.push(arg_expr);
 
-                    if self.peek().unwrap().token_type == TokenType::Comma {
+                    if self.peek()?.token_type == TokenType::Comma {
                         self.advance();
                     }
                 };
@@ -144,9 +147,22 @@ impl<'a> Parser<'a> {
                 Some(stmt)
             },
             TokenType::StackPointReference | TokenType::StackAliasReference => {
-                let expr = self.parse_expression(0).unwrap();
+                let expr = self.parse_expression(0)?;
                 let stmt = Statement::Expression(expr);
                 Some(stmt)
+            },
+            TokenType::KwAlias => {
+                self.advance(); // consume the alias
+                let point_ref = self.expect(TokenType::StackPointReference)?;
+                let point = *point_ref;
+                self.expect(TokenType::KwAs); // consume / expect as
+                let identifier = self.expect(TokenType::Identifier)?;
+                let alias = identifier.value;
+                let point_expr = Expression::StackReference(point);
+                Some(Statement::Alias {
+                    slot: point_expr,
+                    value: alias,
+                })
             },
             _ => None,
         }
@@ -175,7 +191,7 @@ impl<'a> Parser<'a> {
                         if self.peek().map(|t| t.token_type) == Some(TokenType::ParenRight) {
                             break;
                         }
-                        let arg_expr = self.parse_expression(0).unwrap();
+                        let arg_expr = self.parse_expression(0)?;
                         args.push(arg_expr);
 
                         if self.peek().unwrap().token_type == TokenType::Comma {
@@ -202,7 +218,7 @@ impl<'a> Parser<'a> {
                 break;
             }
             let op = *self.advance();
-            let right_expr = self.parse_expression(op_importance).unwrap();
+            let right_expr = self.parse_expression(op_importance)?;
             left_expr = Expression::new_binary_op(
                 Box::new(left_expr),
                 op,
