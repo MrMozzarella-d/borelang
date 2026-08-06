@@ -1,4 +1,4 @@
-use crate::token::{Token, TokenType};
+use crate::token::Token;
 
 #[derive(Debug)]
 pub enum Expression<'a> {
@@ -42,6 +42,7 @@ pub enum Statement<'a> {
         params: Vec<&'a str>,
         body: Vec<Statement<'a>>,
     },
+    Return(Option<Expression<'a>>),
     Expression(Expression<'a>),
 }
 

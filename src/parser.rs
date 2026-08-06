@@ -25,18 +25,20 @@ impl<'a> Parser<'a> {
     fn expect(&mut self, expected_type: TokenType) -> Option<&Token<'a>> {
         let token = self.advance();
         if token.token_type != expected_type {
-            eprintln!("Expected type {:?}, got type {:?} at {}:{}", expected_type, token.token_type, token.line, token.column);
+            eprintln!("Expected type {:?}, but got type {:?} at {}:{}", expected_type, token.token_type, token.line, token.column);
             return None
         }
         Some(token)
     }
     fn peek_expect(&self, expected_type: TokenType) -> Option<&Token<'a>> {
-        let token = self.peek();
-        if token?.token_type != expected_type {
-            eprintln!("Expected type {:?}, got type {:?} at {}:{}", expected_type, token?.token_type, token?.line, token?.column);
-            return None
-        }
-        token
+        if let Some(token) = self.peek() {
+            if token.token_type != expected_type {
+                eprintln!("Expected type {:?}, but got type {:?} at {}:{}", expected_type, token.token_type, token.line, token.column);
+                return None
+            }
+            return Some(token)
+        };
+        None
     }
     fn expect_one_of(&mut self, expected_types: Vec<TokenType>) -> Option<&Token<'a>> {
         let token = self.advance();
@@ -164,6 +166,16 @@ impl<'a> Parser<'a> {
                     value: alias,
                 })
             },
+            TokenType::KwReturn => {
+                self.advance(); // consume return kw
+                if self.peek().map(|t| t.is_atomic())? { // because parse_expression would error if it doesnt get a value we check it here first
+                    let expr = self.parse_expression(0)?;           // (that whiny ass bitch)
+                    let stmt = Statement::Return(Some(expr));
+                    return Some(stmt)
+                };
+                let stmt = Statement::Return(None);
+                Some(stmt)
+            },
             _ => None,
         }
     }
@@ -194,7 +206,7 @@ impl<'a> Parser<'a> {
                         let arg_expr = self.parse_expression(0)?;
                         args.push(arg_expr);
 
-                        if self.peek().unwrap().token_type == TokenType::Comma {
+                        if self.peek()?.token_type == TokenType::Comma {
                             self.advance();
                         }
                     }

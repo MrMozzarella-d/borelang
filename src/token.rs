@@ -50,9 +50,17 @@ impl<'a> Token<'a> {
     pub fn new(token_type: TokenType, value: &'a str, line: usize, column: usize) -> Self {
         Self { token_type, value, line, column, }
     }
-
     pub(crate) fn is_operator(&self) -> bool {
         OPERATORS.values().any(|&x| x == self.token_type)
+    }
+    pub(crate) fn is_atomic(&self) -> bool {
+        matches!( self.token_type,
+              TokenType::Identifier
+            | TokenType::StackPointReference
+            | TokenType::StackAliasReference
+            | TokenType::Number
+            | TokenType::StringLiteral
+        )
     }
 }
 

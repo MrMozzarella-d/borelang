@@ -14,6 +14,16 @@ impl ASTPrinter {
     fn print_statement(stmt: &Statement, depth: usize) {
         let indent = "  ".repeat(depth);
         match stmt {
+            Statement::Return(expr) => {
+                println!("{indent}Return:");
+                if expr.is_none() {
+                    println!("{indent}  (Empty)")
+                } else {
+                    for exp in expr.iter() {
+                        Self::print_expression(exp, depth + 3);
+                    }
+                }
+            }
             Statement::ProcedureDeclaration { name, params, body } => {
                 println!("{indent}ProcedureDeclaration:");
                 println!("{indent}  Name: {name}");
