@@ -98,6 +98,7 @@ impl<'a> Lexer<'a> {
                     let peek_next = self.peek();
                     if peek_next == '[' { // alias reference
                         self.advance();
+                        let start_pos = self.current;
                         while self.current < self.source.len() {
                             let next_char = self.peek();
                             if next_char.is_alphanumeric() || next_char == '_' {

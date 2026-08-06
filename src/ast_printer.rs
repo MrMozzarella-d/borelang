@@ -92,7 +92,7 @@ impl ASTPrinter {
                 }
             }
             Expression::BinaryOp { left, op, right } => {
-                println!("{indent}BinaryOp (Operator: {value})", value = op.value);
+                println!("{indent}BinaryOp '{value}'", value = op.value);
                 println!("{indent}  Left:");
                 Self::print_expression(left, depth + 2);
                 println!("{indent}  Right:");

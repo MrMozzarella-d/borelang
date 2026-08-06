@@ -143,6 +143,11 @@ impl<'a> Parser<'a> {
                 let stmt = Statement::new_call(callee, expr_vec);
                 Some(stmt)
             },
+            TokenType::StackPointReference | TokenType::StackAliasReference => {
+                let expr = self.parse_expression(0).unwrap();
+                let stmt = Statement::Expression(expr);
+                Some(stmt)
+            },
             _ => None,
         }
     }
@@ -162,7 +167,7 @@ impl<'a> Parser<'a> {
             TokenType::Number => Expression::NumberLiteral(left.value.parse().unwrap()),
             TokenType::StringLiteral => Expression::StringLiteral(left.value.parse().unwrap()),
             TokenType::Identifier => {
-                let mut id = left.value;
+                let id = left.value;
                 if self.peek().map(|t| t.token_type) == Some(TokenType::ParenLeft) { // function
                     self.advance(); // consume the parenLeft
                     let mut args = Vec::new();

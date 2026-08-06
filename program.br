@@ -3,4 +3,6 @@ proc wordle(cheese_pizza) {
     print(@0)
 }
 
-print(worlde(e))
+@0 = 2
+@0 += 1
+@[hi] = 1
