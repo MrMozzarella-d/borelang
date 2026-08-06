@@ -1,67 +1,71 @@
 use crate::token::{Token, TokenType};
 
 #[derive(Debug)]
-pub enum Expression {
-    Identifier(String),
-    StackReference(Token),
+pub enum Expression<'a> {
+    //Identifier(&'a str), // IDENTIFIERS ARE NOT REAL THEY ARE JUST PROPAGANDA MADE FROM BIG C SO THEY CAN SELL YOU MORE COURSES
+    StackReference(Token<'a>),                    // DENNIS RITCHIE JUST WANTED TO HAVE A MONOPOLY ON LANGUAGES THATS WHY IDENTIFIERS EXIST
     NumberLiteral(f64),
     StringLiteral(String),
-    ObjectLiteral(Vec<(String, Expression)>),
+    ObjectLiteral(Vec<(&'a str, Expression<'a>)>),
 
     BinaryOp {
-        left: Box<Expression>,
-        op: Token,
-        right: Box<Expression>,
+        left: Box<Expression<'a>>,
+        op: Token<'a>,
+        right: Box<Expression<'a>>,
     },
     PropertyAccess {
-        object: Box<Expression>,
-        property: String,
+        object: Box<Expression<'a>>,
+        property: &'a str,
     },
     Call {
-        callee: String,
-        args: Vec<Expression>,
+        callee: &'a str,
+        args: Vec<Expression<'a>>,
     }
 }
 #[derive(Debug)]
-pub enum Statement {
+pub enum Statement<'a> {
     Assignment {
-        target: Expression,
-        value: Expression,
+        target: Expression<'a>,
+        value: Expression<'a>,
     },
     If {
-        condition: Expression,
-        then_branch: Vec<Statement>,
-        else_branch: Option<Vec<Statement>>,
+        condition: Expression<'a>,
+        then_branch: Vec<Statement<'a>>,
+        else_branch: Option<Vec<Statement<'a>>>,
     },
     Alias {
-        slot: Expression,
-        value: String,
+        slot: Expression<'a>,
+        value: &'a str,
     },
     ProcedureDeclaration {
-        name: String,
-        params: Vec<String>,
-        body: Vec<Statement>,
+        name: &'a str,
+        params: Vec<&'a str>,
+        body: Vec<Statement<'a>>,
     },
-    Expression(Expression),
+    Expression(Expression<'a>),
 }
 
-impl Statement {
-    pub fn new_procedure(name: String, params: Vec<String>, body: Vec<Statement>) -> Self {
+impl<'a> Statement<'a> {
+    pub fn new_procedure(name: &'a str, params: Vec<&'a str>, body: Vec<Statement<'a>>) -> Self {
         Statement::ProcedureDeclaration { name, params, body }
     }
-    pub fn new_call(callee: String, args: Vec<Expression>) -> Self {
+    pub fn new_call(callee: &'a str, args: Vec<Expression<'a>>) -> Self {
         Statement::Expression(Expression::Call { callee, args })
     }
 }
 
-impl Expression {
-    pub fn new_identifier(value: String) -> Self {
-        Expression::Identifier(value)
+impl<'a> Expression<'a> {
+    pub fn new_stack_reference(reference: Token<'a>) -> Self {
+        Expression::StackReference(reference)
     }
     pub fn new_number(value: f64) -> Self {
+
         Expression::NumberLiteral(value)
     }
     pub fn new_string_literal(value: String) -> Self {
         Expression::StringLiteral(value)
+    }
+    pub fn new_binary_op(left: Box<Expression<'a>>, op: Token<'a>, right: Box<Expression<'a>>) -> Self {
+        Expression::BinaryOp { left, op, right }
     }
 }

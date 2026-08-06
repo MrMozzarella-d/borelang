@@ -1,15 +1,15 @@
 use crate::token;
 use crate::token::{Token, TokenType};
 
-pub struct Lexer {
-    source: String,
+pub struct Lexer<'a> {
+    source: &'a str,
     //start: usize,
     current: usize,
     line: usize,
     column: usize,
 }
-impl Lexer {
-    pub fn new(source:String) -> Self {
+impl<'a> Lexer<'a> {
+    pub fn new(source: &'a str) -> Self {
         Self {
             source,
             //start: 0,
@@ -39,12 +39,12 @@ impl Lexer {
     }
     fn is_at_end(&self) -> bool { self.current >= self.source.len() }
 
-    pub fn tokenize(&mut self) -> Vec<Token> {
-        let mut token_vec = Vec::new();
+    pub fn tokenize(&mut self) -> Vec<Token<'a>> {
+        let mut token_vec: Vec<Token<'a>> = Vec::new();
         while self.current < self.source.len() {
+            let start_pos = self.current;
             let char = self.advance();
             if char.is_alphabetic() || char == '_' {
-                let start_pos = self.current - char.len_utf8();
                 while self.current < self.source.len() {
                     let next_char = self.peek();
                     if next_char.is_alphanumeric() || next_char == '_' {
@@ -73,7 +73,6 @@ impl Lexer {
                 continue;
             }
             if char.is_numeric() {
-                let start_pos = self.current - char.len_utf8();
                 while self.current < self.source.len() {
                     let next = self.peek();
                     if next.is_numeric() {
@@ -89,7 +88,8 @@ impl Lexer {
                     val,
                     self.line,
                     self.column,
-                ))
+                ));
+                continue;
             }
 
             match char {
@@ -97,8 +97,7 @@ impl Lexer {
                 '@'                     => {
                     let peek_next = self.peek();
                     if peek_next == '[' { // alias reference
-                        let _ = self.advance();
-                        let start_pos = self.current - char.len_utf8();
+                        self.advance();
                         while self.current < self.source.len() {
                             let next_char = self.peek();
                             if next_char.is_alphanumeric() || next_char == '_' {
@@ -108,7 +107,7 @@ impl Lexer {
                             }
                         }
                         let end_pos = self.current;
-                        _ = self.advance(); // consume ]
+                        self.advance(); // consume ]
                         let val = &self.source[start_pos..end_pos];
                         token_vec.push(Token::new(
                             TokenType::StackAliasReference,
@@ -139,27 +138,23 @@ impl Lexer {
                     }
                 },
                 '+' | '/' | '*' | '=' | '-' => {
-                    match self.peek_next() {
-                        '=' => {
-                            let comb_string = format!("{char}=");
-                            let comb = comb_string.as_str();
-                            token_vec.push(Token::new(
-                                *token::OPERATORS.get(comb).unwrap(),
-                                comb,
-                                self.line,
-                                self.column,
-                            ))
-                        }
-                        _ => {
-                            let string = char.to_string();
-                            let str = string.as_str();
-                            token_vec.push(Token::new(
-                                *token::OPERATORS.get(str).unwrap(),
-                                str,
-                                self.line,
-                                self.column,
-                            ))
-                        }
+                    if self.peek() == '=' {
+                        self.advance(); // consume =
+                        let op_str = &self.source[start_pos..self.current];
+                        token_vec.push(Token::new(
+                            *token::OPERATORS.get(op_str).unwrap(),
+                            op_str,
+                            self.line,
+                            self.column,
+                        ))
+                    } else {
+                        let op_str = &self.source[start_pos..self.current]; // same here because we dont step
+                        token_vec.push(Token::new(                         // forward once..
+                            *token::OPERATORS.get(op_str).unwrap(),
+                            op_str,
+                            self.line,
+                            self.column,
+                        ))
                     }
                 },
                 '"'                 => {
@@ -173,62 +168,22 @@ impl Lexer {
                     }
                     let end_pos = self.current;
                     let text = &self.source[start_pos..end_pos];
+                    self.advance(); // consume other "
                     token_vec.push(Token::new(
                         TokenType::StringLiteral,
                         text,
                         self.line,
                         self.column,
                     ));
-                    self.advance(); // consume other "
                 },
-                '{' => token_vec.push(Token::new(
-                    TokenType::BraceLeft,
-                    "{",
-                    self.line,
-                    self.column,
-                )),
-                '}' => token_vec.push(Token::new(
-                    TokenType::BraceRight,
-                    "}",
-                    self.line,
-                    self.column,
-                )),
-                '[' => token_vec.push(Token::new(
-                    TokenType::BracketLeft,
-                    "[",
-                    self.line,
-                    self.column,
-                )),
-                ']' => token_vec.push(Token::new(
-                    TokenType::BracketRight,
-                    "]",
-                    self.line,
-                    self.column,
-                )),
-                '(' => token_vec.push(Token::new(
-                    TokenType::ParenLeft,
-                    "(",
-                    self.line,
-                    self.column,
-                )),
-                ')' => token_vec.push(Token::new(
-                    TokenType::ParenRight,
-                    ")",
-                    self.line,
-                    self.column,
-                )),
-                ',' => token_vec.push(Token::new(
-                    TokenType::Comma,
-                    ",",
-                    self.line,
-                    self.column,
-                )),
-                '.' => token_vec.push(Token::new(
-                    TokenType::Dot,
-                    ".",
-                    self.line,
-                    self.column,
-                )),
+                '{' => token_vec.push(Token::new(TokenType::BraceLeft,   "{", self.line, self.column, )),
+                '}' => token_vec.push(Token::new(TokenType::BraceRight,  "}", self.line, self.column, )),
+                '[' => token_vec.push(Token::new(TokenType::BracketLeft, "[", self.line, self.column, )),
+                ']' => token_vec.push(Token::new(TokenType::BracketRight,"]", self.line, self.column, )),
+                '(' => token_vec.push(Token::new(TokenType::ParenLeft,   "(", self.line, self.column, )),
+                ')' => token_vec.push(Token::new(TokenType::ParenRight,  ")", self.line, self.column, )),
+                ',' => token_vec.push(Token::new(TokenType::Comma,       ",", self.line, self.column, )),
+                '.' => token_vec.push(Token::new(TokenType::Dot,         ".", self.line, self.column, )),
                 _ => { continue; }
             }
         };

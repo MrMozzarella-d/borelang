@@ -1,20 +1,25 @@
 use crate::node::{Expression, Statement};
 use crate::token::{Token, TokenType};
 
-pub struct Parser {
-    tokens: Vec<Token>,
+pub struct Parser<'a> {
+    tokens: Vec<Token<'a>>,
     current: usize,
 }
 
-impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self { Self { tokens, current: 0 } }
+impl<'a> Parser<'a> {
+    pub fn new(tokens: Vec<Token<'a>>) -> Self {
+        Self {
+            tokens,
+            current: 0
+        }
+    }
 
-    fn advance(&mut self) -> &Token {
+    fn advance(&mut self) -> &Token<'a> {
         let t = self.tokens.get(self.current).unwrap();
         self.current += 1;
         t
     }
-    fn expect(&mut self, expected_type: TokenType) -> Option<&Token> {
+    fn expect(&mut self, expected_type: TokenType) -> Option<&Token<'a>> {
         let token = self.advance();
         if token.token_type != expected_type {
             eprintln!("Expected type {:?}, got type {:?} at {}:{}", expected_type, token.token_type, token.line, token.column);
@@ -22,7 +27,7 @@ impl Parser {
         }
         Some(token)
     }
-    fn peek_expect(&mut self, expected_type: TokenType) -> Option<&Token> {
+    fn peek_expect(&self, expected_type: TokenType) -> Option<&Token<'a>> {
         let token = self.peek();
         if token.unwrap().token_type != expected_type {
             eprintln!("Expected type {:?}, got type {:?} at {}:{}", expected_type, token.unwrap().token_type, token.unwrap().line, token.unwrap().column);
@@ -30,7 +35,7 @@ impl Parser {
         }
         token
     }
-    fn expect_one_of(&mut self, expected_types: Vec<TokenType>) -> Option<&Token> {
+    fn expect_one_of(&mut self, expected_types: Vec<TokenType>) -> Option<&Token<'a>> {
         let token = self.advance();
         let mut got = false;
         for expected in expected_types.iter() {
@@ -45,15 +50,15 @@ impl Parser {
             for exp in expected_types.iter() {
                 eprint!("{:?}, ", *exp);
             }
-            eprintln!("got {:?}.", token.token_type);
+            eprintln!("but got {:?} at {}:{}.", token.token_type, token.line, token.column);
             None
         }
 
     }
-    fn peek(&mut self) -> Option<&Token> {
+    fn peek(&self) -> Option<&Token<'a>> {
         self.tokens.get(self.current)
     }
-    fn peek_next(&mut self) -> Option<&Token> {
+    fn peek_next(&self) -> Option<&Token<'a>> {
         if self.current + 1 >= self.tokens.len() || self.tokens.get(self.current+1)?.token_type == TokenType::EOF {
             return None
         }
@@ -63,90 +68,112 @@ impl Parser {
     //    let peek = self.peek().unwrap();
     //    peek.token_type == TokenType::EOF
     //}
-    pub(crate) fn parse(&mut self) -> Vec<Statement> {
-        let mut statement_vec = Vec::new();
+    pub(crate) fn parse(&mut self) -> Vec<Statement<'a>> {
+        let mut statement_vec: Vec<Statement<'a>> = Vec::new();
         while self.current < self.tokens.len() {
-            let token = self.advance();
-            match token.token_type {
-                TokenType::EOF => break,
-                TokenType::KwProc => {
-                    let name_token = self.expect(TokenType::Identifier).unwrap();
-                    let proc_name = name_token.value.clone();
-                    self.expect(TokenType::ParenLeft);
-                    let mut params = Vec::new();
-                    while self.current < self.tokens.len() {
-                        if self.peek().unwrap().token_type == TokenType::ParenRight {
-                            break;
-                        }
-                        let param = self.expect(TokenType::Identifier).unwrap();
-                        let param_name = param.value.clone();
-                        params.push(param_name);
-                        if self.peek().unwrap().token_type != TokenType::ParenRight { // expect a comma and another identifier if there is no other parentheses
-                            self.expect(TokenType::Comma);
-                            self.peek_expect(TokenType::Identifier);
-                        }
-                    }
-                    self.advance();
-                    self.expect(TokenType::BraceLeft);
-                    let mut body = Vec::new();
-                    while self.current < self.tokens.len() {
-                        if self.peek().unwrap().token_type == TokenType::BraceRight {
-                            break;
-                        }
-                        let statement = self.parse_statement().unwrap();
-                        body.push(statement);
-                    }
-
-                    statement_vec.push(Statement::new_procedure(
-                        proc_name,
-                        params,
-                        body
-                    ))
-                },
-                _ => {
-                    let stmt = self.parse_statement().unwrap();
-                    statement_vec.push(stmt);
-                },
+            if let Some(token) = self.peek() {
+                if token.token_type == TokenType::EOF {
+                    break;
+                }
+            } else {
+                break;
+            }
+            if let Some(stmt) = self.parse_statement() {
+                statement_vec.push(stmt);
+            } else {
+                self.advance();
             }
         }
         statement_vec
     }
-    fn parse_statement(&mut self) -> Option<Statement> {
-        let token = self.advance();
-        match token.token_type {
-            TokenType::Identifier => {
-                let value = token.value.clone();
-                self.expect(TokenType::ParenLeft); // expect it to be a function
-                let mut expr_vec = Vec::new();
+    fn parse_statement(&mut self) -> Option<Statement<'a>> {
+        let token_type = self.peek()?.token_type;
+        match token_type {
+            TokenType::KwProc => {
+                self.advance(); // consume proc, to name
+                let name_token = self.expect(TokenType::Identifier).unwrap();
+                let proc_name = name_token.value;
+                self.expect(TokenType::ParenLeft);
+                let mut params = Vec::new();
                 while self.current < self.tokens.len() {
                     if self.peek().unwrap().token_type == TokenType::ParenRight {
                         break;
                     }
-                    let arg_token = self.expect_one_of(vec![TokenType::Identifier, TokenType::Number]).unwrap();
-                    let arg_expr = self.parse_expression(arg_token).unwrap();
+                    let param = self.expect(TokenType::Identifier).unwrap();
+                    params.push(param.value);
+                    if self.peek().unwrap().token_type == TokenType::Comma {
+                        self.advance();
+                    }
+                }
+                self.expect(TokenType::ParenRight);
+                self.expect(TokenType::BraceLeft);
+                let mut body: Vec<Statement<'a>> = Vec::new();
+                while self.current < self.tokens.len() {
+                    if self.peek().unwrap().token_type == TokenType::BraceRight {
+                        break;
+                    }
+                    if let Some(stmt) = self.parse_statement() {
+                        body.push(stmt);
+                    } else {
+                        self.advance();
+                    }
+                }
+                self.expect(TokenType::BraceRight);
+                let stmt = Statement::new_procedure(proc_name, params, body);
+                Some(stmt)
+            },
+            TokenType::Identifier => {
+                let callee_token = self.advance(); // consume identifier
+                let callee = callee_token.value;
+                self.expect(TokenType::ParenLeft); // expect it to be a function
+                let mut expr_vec = Vec::new();
+                while self.current < self.tokens.len() {
+                    if self.peek_next().unwrap().token_type == TokenType::ParenRight {
+                        break;
+                    }
+                    self.expect_one_of(vec![TokenType::Identifier, TokenType::Number]).unwrap();
+                    let arg_expr = self.parse_expression(0).unwrap();
                     expr_vec.push(arg_expr);
                 };
-                let stmt = Statement::new_call(value, expr_vec);
+                let stmt = Statement::new_call(callee, expr_vec);
                 Some(stmt)
             },
             _ => None,
         }
     }
-    fn parse_expression(&mut self, token: &Token) -> Option<Expression> {
-        match token.token_type {
-            TokenType::Identifier => {
-                let value = token.value.clone();
-                Some(Expression::new_identifier(value))
-            },
-            TokenType::Number => Some(Expression::new_number(token.value.parse().unwrap())),
-            TokenType::StringLiteral => {
-                let value = token.value.clone();
-                Some(Expression::new_string_literal(value))
-            },
-            _ => {
-                eprintln!("Expected type of identifier, number or string literal when parsing expression, got {:?}.", token.token_type);
-                None
-            }
+    fn get_importance(&self, token_type: TokenType) -> usize {
+        match token_type {
+            TokenType::Equal | TokenType::PlusEqual | TokenType::MinusEqual | TokenType::MultiplyEqual | TokenType::DivideEqual => 1,
+            TokenType::CompEqual => 2,
+            TokenType::Plus | TokenType::Minus => 3,
+            TokenType::Multiply | TokenType::Divide => 4,
+            _ => 0,
         }
+    }
+    fn parse_expression(&mut self, min_importance: usize) -> Option<Expression<'a>> {
+        let left = self.advance();
+        let mut left_expr = match left.token_type {
+            TokenType::StackPointReference | TokenType::StackAliasReference => Expression::new_stack_reference(*left),
+            TokenType::Number => Expression::new_number(left.value.parse().unwrap()),
+            TokenType::StringLiteral => Expression::new_string_literal(left.value.parse().unwrap()),
+            _ => {
+                eprint!("Syntax Error: Expected Number, String, or Stack Reference, but got {:?} at {}:{}.", left.token_type, left.line, left.column);
+                return None;
+            }
+        };
+        while let Some(next) = self.peek().map(|t| t.token_type) {
+            let op_importance = self.get_importance(next);
+            if op_importance <= min_importance {
+                break;
+            }
+            let op = *self.advance();
+            let right_expr = self.parse_expression(op_importance).unwrap();
+            left_expr = Expression::new_binary_op(
+                Box::new(left_expr),
+                op,
+                Box::new(right_expr),
+            )
+        };
+        Some(left_expr)
     }
 }

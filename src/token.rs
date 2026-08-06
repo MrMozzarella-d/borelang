@@ -39,16 +39,20 @@ pub enum TokenType {
 
     EOF,
 }
-#[derive(Debug)]
-pub struct  Token {
+#[derive(Debug, Copy, Clone)]
+pub struct  Token<'a> {
     pub(crate) token_type: TokenType,
-    pub(crate) value: String,
+    pub(crate) value: &'a str,
     pub(crate) line: usize,
     pub(crate) column: usize,
 }
-impl Token {
-    pub fn new(token_type: TokenType, value: &str, line: usize, column: usize) -> Self {
-        Self { token_type, value: value.parse().unwrap(), line, column, }
+impl<'a> Token<'a> {
+    pub fn new(token_type: TokenType, value: &'a str, line: usize, column: usize) -> Self {
+        Self { token_type, value, line, column, }
+    }
+
+    pub(crate) fn is_operator(&self) -> bool {
+        OPERATORS.values().any(|&x| x == self.token_type)
     }
 }
 
