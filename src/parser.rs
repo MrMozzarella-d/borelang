@@ -125,16 +125,21 @@ impl<'a> Parser<'a> {
             TokenType::Identifier => {
                 let callee_token = self.advance(); // consume identifier
                 let callee = callee_token.value;
-                self.expect(TokenType::ParenLeft); // expect it to be a function
+                self.expect(TokenType::ParenLeft); // expect it to be a function, we are now on the first letter of the function args
                 let mut expr_vec = Vec::new();
                 while self.current < self.tokens.len() {
-                    if self.peek_next().unwrap().token_type == TokenType::ParenRight {
+                    if self.peek().unwrap().token_type == TokenType::ParenRight {
                         break;
                     }
-                    self.expect_one_of(vec![TokenType::Identifier, TokenType::Number]).unwrap();
                     let arg_expr = self.parse_expression(0).unwrap();
                     expr_vec.push(arg_expr);
+
+                    if self.peek().unwrap().token_type == TokenType::Comma {
+                        self.advance();
+                    }
                 };
+                self.expect(TokenType::ParenRight);
+
                 let stmt = Statement::new_call(callee, expr_vec);
                 Some(stmt)
             },
@@ -153,11 +158,36 @@ impl<'a> Parser<'a> {
     fn parse_expression(&mut self, min_importance: usize) -> Option<Expression<'a>> {
         let left = self.advance();
         let mut left_expr = match left.token_type {
-            TokenType::StackPointReference | TokenType::StackAliasReference => Expression::new_stack_reference(*left),
-            TokenType::Number => Expression::new_number(left.value.parse().unwrap()),
-            TokenType::StringLiteral => Expression::new_string_literal(left.value.parse().unwrap()),
+            TokenType::StackPointReference | TokenType::StackAliasReference => Expression::StackReference(*left),
+            TokenType::Number => Expression::NumberLiteral(left.value.parse().unwrap()),
+            TokenType::StringLiteral => Expression::StringLiteral(left.value.parse().unwrap()),
+            TokenType::Identifier => {
+                let mut id = left.value;
+                if self.peek().map(|t| t.token_type) == Some(TokenType::ParenLeft) { // function
+                    self.advance(); // consume the parenLeft
+                    let mut args = Vec::new();
+                    while self.current < self.tokens.len() {
+                        if self.peek().map(|t| t.token_type) == Some(TokenType::ParenRight) {
+                            break;
+                        }
+                        let arg_expr = self.parse_expression(0).unwrap();
+                        args.push(arg_expr);
+
+                        if self.peek().unwrap().token_type == TokenType::Comma {
+                            self.advance();
+                        }
+                    }
+                    self.expect(TokenType::ParenRight);
+                    Expression::Call {
+                        callee: id,
+                        args
+                    }
+                } else {
+                    Expression::Identifier(id)
+                }
+            },
             _ => {
-                eprint!("Syntax Error: Expected Number, String, or Stack Reference, but got {:?} at {}:{}.", left.token_type, left.line, left.column);
+                eprint!("Syntax Error: Expected Number, String, Identifier, or Stack Reference at {}:{}, but got {:?}.", left.line, left.column, left.token_type);
                 return None;
             }
         };

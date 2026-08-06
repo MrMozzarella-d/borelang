@@ -67,6 +67,9 @@ impl ASTPrinter {
     fn print_expression(expr: &Expression, depth: usize) {
         let indent = "  ".repeat(depth);
         match expr {
+            Expression::Identifier(val) => {
+                println!("{indent}Identifier: {val}");
+            }
             Expression::NumberLiteral(val) => {
                 println!("{indent}NumberLiteral: {val}");
             }

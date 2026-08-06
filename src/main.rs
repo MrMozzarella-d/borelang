@@ -1,7 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::Read;
 use crate::lexer::Lexer;
-use crate::node::Statement;
 use crate::parser::Parser;
 
 mod token;

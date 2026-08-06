@@ -2,9 +2,9 @@ use crate::token::{Token, TokenType};
 
 #[derive(Debug)]
 pub enum Expression<'a> {
-    //Identifier(&'a str), // IDENTIFIERS ARE NOT REAL THEY ARE JUST PROPAGANDA MADE FROM BIG C SO THEY CAN SELL YOU MORE COURSES
+    Identifier(&'a str), // IDENTIFIERS ARE NOT REAL THEY ARE JUST PROPAGANDA MADE FROM BIG C SO THEY CAN SELL YOU MORE COURSES
     StackReference(Token<'a>),                    // DENNIS RITCHIE JUST WANTED TO HAVE A MONOPOLY ON LANGUAGES THATS WHY IDENTIFIERS EXIST
-    NumberLiteral(f64),
+    NumberLiteral(f64),                           // just kidding haha :D
     StringLiteral(String),
     ObjectLiteral(Vec<(&'a str, Expression<'a>)>),
 
