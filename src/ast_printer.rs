@@ -24,8 +24,8 @@ impl ASTPrinter {
                     }
                 }
             }
-            Statement::ProcedureDeclaration { name, params, body } => {
-                println!("{indent}ProcedureDeclaration:");
+            Statement::FunctionDeclaration { name, params, body } => {
+                println!("{indent}FunctionDeclaration:");
                 println!("{indent}  Name: {name}");
                 println!("{indent}  Params: {:?}", params);
                 println!("{indent}  Body:");
@@ -60,12 +60,6 @@ impl ASTPrinter {
                     }
                 }
             }
-            Statement::Alias { slot, value } => {
-                println!("{indent}AliasDeclaration:");
-                println!("{indent}  Slot:");
-                Self::print_expression(slot, depth + 2);
-                println!("{indent}  Value: {value}");
-            }
             Statement::Expression(expr) => {
                 println!("{indent}ExpressionStatement:");
                 Self::print_expression(expr, depth + 1);
@@ -80,19 +74,14 @@ impl ASTPrinter {
             Expression::Identifier(val) => {
                 println!("{indent}Identifier: {val}");
             }
-            Expression::NumberLiteral(val) => {
-                println!("{indent}NumberLiteral: {val}");
+            Expression::Integer(val) => {
+                println!("{indent}Integer: {val}");
+            },
+            Expression::Float(val) => {
+                println!("{indent}Float: {val}");
             }
             Expression::StringLiteral(val) => {
                 println!("{indent}StringLiteral: \"{val}\"");
-            }
-            Expression::StackReference(token) => {
-                let ref_type = match token.token_type {
-                    TokenType::StackAliasReference => "Alias",
-                    TokenType::StackPointReference => "Point",
-                    _ => "Unknown",
-                };
-                println!("{indent}StackReference ({ref_type}): {value}", value = token.value);
             }
             Expression::ObjectLiteral(fields) => {
                 println!("{indent}ObjectLiteral:");
@@ -108,12 +97,12 @@ impl ASTPrinter {
                 println!("{indent}  Right:");
                 Self::print_expression(right, depth + 2);
             }
-            Expression::PropertyAccess { object, property } => {
-                println!("{indent}PropertyAccess:");
-                println!("{indent}  Object:");
-                Self::print_expression(object, depth + 2);
-                println!("{indent}  Property: {property}");
-            }
+            // Expression::PropertyAccess { object, property } => {
+            //     println!("{indent}PropertyAccess:");
+            //     println!("{indent}  Object:");
+            //     Self::print_expression(object, depth + 2);
+            //     println!("{indent}  Property: {property}");
+            // }
             Expression::Call { callee, args } => {
                 println!("{indent}Call (Callee: {callee}):");
                 if args.is_empty() {
@@ -124,7 +113,8 @@ impl ASTPrinter {
                         Self::print_expression(arg, depth + 2);
                     }
                 }
-            }
+            },
+            _ => {}
         }
     }
 }

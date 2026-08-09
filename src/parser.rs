@@ -130,41 +130,28 @@ impl<'a> Parser<'a> {
             TokenType::Identifier => {
                 let callee_token = self.advance(); // consume identifier
                 let callee = callee_token.value;
-                self.expect(TokenType::ParenLeft); // expect it to be a function, we are now on the first letter of the function args
-                let mut expr_vec = Vec::new();
-                while self.current < self.tokens.len() {
-                    if self.peek()?.token_type == TokenType::ParenRight {
-                        break;
-                    }
-                    let arg_expr = self.parse_expression(0)?;
-                    expr_vec.push(arg_expr);
+                if self.peek().map(|t| t.token_type == TokenType::ParenLeft)? {
+                    self.expect(TokenType::ParenLeft);
+                    let mut expr_vec = Vec::new();
+                    while self.current < self.tokens.len() {
+                        if self.peek()?.token_type == TokenType::ParenRight {
+                            break;
+                        }
+                        let arg_expr = self.parse_expression(0)?;
+                        expr_vec.push(arg_expr);
 
-                    if self.peek()?.token_type == TokenType::Comma {
-                        self.advance();
-                    }
-                };
-                self.expect(TokenType::ParenRight);
+                        if self.peek()?.token_type == TokenType::Comma {
+                            self.advance();
+                        }
+                    };
+                    self.expect(TokenType::ParenRight);
 
-                let stmt = Statement::new_call(callee, expr_vec);
-                Some(stmt)
-            },
-            TokenType::StackPointReference | TokenType::StackAliasReference => {
-                let expr = self.parse_expression(0)?;
-                let stmt = Statement::Expression(expr);
-                Some(stmt)
-            },
-            TokenType::KwAlias => {
-                self.advance(); // consume the alias
-                let point_ref = self.expect(TokenType::StackPointReference)?;
-                let point = *point_ref;
-                self.expect(TokenType::KwAs); // consume / expect as
-                let identifier = self.expect(TokenType::Identifier)?;
-                let alias = identifier.value;
-                let point_expr = Expression::StackReference(point);
-                Some(Statement::Alias {
-                    slot: point_expr,
-                    value: alias,
-                })
+                    let stmt = Statement::new_call(callee, expr_vec);
+                    return Some(stmt)
+                }
+                let t = self.advance();
+                eprintln!("Expected call when parsing identifier at {}:{}.", t.line, t.column);
+                None
             },
             TokenType::KwReturn => {
                 self.advance(); // consume return kw
@@ -191,8 +178,8 @@ impl<'a> Parser<'a> {
     fn parse_expression(&mut self, min_importance: usize) -> Option<Expression<'a>> {
         let left = self.advance();
         let mut left_expr = match left.token_type {
-            TokenType::StackPointReference | TokenType::StackAliasReference => Expression::StackReference(*left),
-            TokenType::Number => Expression::NumberLiteral(left.value.parse().unwrap()),
+            TokenType::Int => Expression::Integer(left.value.parse().unwrap()),
+            TokenType::Float => Expression::Float(left.value.parse().unwrap()),
             TokenType::StringLiteral => Expression::StringLiteral(left.value.parse().unwrap()),
             TokenType::Identifier => {
                 let id = left.value;
@@ -220,22 +207,27 @@ impl<'a> Parser<'a> {
                 }
             },
             _ => {
-                eprint!("Syntax Error: Expected Number, String, Identifier, or Stack Reference at {}:{}, but got {:?}.", left.line, left.column, left.token_type);
+                eprint!("Syntax Error: Expected Number, String or Identifier {}:{}, but got {:?}.", left.line, left.column, left.token_type);
                 return None;
             }
         };
         while let Some(next) = self.peek().map(|t| t.token_type) {
+            if next == TokenType::Dot {
+                
+            } else if next == TokenType::ParenLeft {
+                
+            }
             let op_importance = self.get_importance(next);
             if op_importance <= min_importance {
                 break;
             }
             let op = *self.advance();
             let right_expr = self.parse_expression(op_importance)?;
-            left_expr = Expression::new_binary_op(
-                Box::new(left_expr),
+            left_expr = Expression::BinaryOp {
+                left: Box::new(left_expr),
                 op,
-                Box::new(right_expr),
-            )
+                right: Box::new(right_expr),
+            }
         };
         Some(left_expr)
     }

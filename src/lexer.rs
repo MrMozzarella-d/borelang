@@ -75,7 +75,7 @@ impl<'a> Lexer<'a> {
             if char.is_numeric() {
                 while self.current < self.source.len() {
                     let next = self.peek();
-                    if next.is_numeric() {
+                    if next.is_numeric() || (next == '.' && self.peek_next().is_numeric()) {
                         self.advance();
                     } else {
                         break;
@@ -83,61 +83,26 @@ impl<'a> Lexer<'a> {
                 }
                 let end_pos = self.current;
                 let val = &self.source[start_pos..end_pos];
-                token_vec.push(Token::new(
-                    TokenType::Number,
-                    val,
-                    self.line,
-                    self.column,
-                ));
+                if val.contains('.') {
+                    token_vec.push(Token::new(
+                        TokenType::Float,
+                        val,
+                        self.line,
+                        self.column,
+                    ));
+                } else { 
+                    token_vec.push(Token::new(
+                            TokenType::Int,
+                            val,
+                            self.line,
+                            self.column, 
+                        )); 
+                }
                 continue;
             }
 
             match char {
                 ' ' | '\n' |  '\r' |  '\t'  => { continue; },
-                '@'                     => {
-                    let peek_next = self.peek();
-                    if peek_next == '[' { // alias reference
-                        self.advance();
-                        let start_pos = self.current;
-                        while self.current < self.source.len() {
-                            let next_char = self.peek();
-                            if next_char.is_alphanumeric() || next_char == '_' {
-                                self.advance();
-                            } else {
-                                break;
-                            }
-                        }
-                        let end_pos = self.current;
-                        self.advance(); // consume ]
-                        let val = &self.source[start_pos..end_pos];
-                        token_vec.push(Token::new(
-                            TokenType::StackAliasReference,
-                            val,
-                            self.line,
-                            self.column,
-                        ))
-                    } else if peek_next.is_numeric() {
-                        let start_pos = self.current;
-                        while self.current < self.source.len() {
-                            let char = self.peek();
-                            if !char.is_numeric() {
-                                break;
-                            } else {
-                                self.advance();
-                            }
-                        }
-                        let end_pos = self.current;
-                        let val = &self.source[start_pos..end_pos];
-                        token_vec.push(Token::new(
-                            TokenType::StackPointReference,
-                            val,
-                            self.line,
-                            self.column,
-                        ))
-                    } else {
-                        eprintln!("Syntax Error: Unrecognized character for stack point reference '{}'", char);
-                    }
-                },
                 '+' | '/' | '*' | '=' | '-' => {
                     if self.peek() == '=' {
                         self.advance(); // consume =

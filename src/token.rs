@@ -2,10 +2,9 @@ use phf::phf_map;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TokenType {
-    Identifier,                
-    StackPointReference,       
-    StackAliasReference,        
-    Number,                     
+    Identifier,
+    Int,
+    Float,
     StringLiteral,              
     // operators                //all done
     Equal,
@@ -23,8 +22,12 @@ pub enum TokenType {
     KwElse,
     KwReturn,
     KwBreak,
-    KwProc,
-    KwAlias,
+    KwWhile,
+    KwFor,
+    KwLet,
+    KwFunction,
+    KwMut,
+    KwExtern,
     KwAs,
     // punctuation //all done
     BraceLeft,      // {
@@ -56,8 +59,6 @@ impl<'a> Token<'a> {
     pub(crate) fn is_atomic(&self) -> bool {
         matches!( self.token_type,
               TokenType::Identifier
-            | TokenType::StackPointReference
-            | TokenType::StackAliasReference
             | TokenType::Number
             | TokenType::StringLiteral
         )
@@ -68,10 +69,12 @@ pub static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
     "if" => TokenType::KwIf,
     "else" => TokenType::KwElse,
     "return" => TokenType::KwReturn,
-    "alias" => TokenType::KwAlias,
     "as" => TokenType::KwAs,
-    "proc" => TokenType::KwProc,
     "break" => TokenType::KwBreak,
+    "ext" => TokenType::KwExtern,
+    "fn" => TokenType::KwFunction,
+    "let" => TokenType::KwLet,
+    "mut" => TokenType::KwMut,
 };
 
 pub static OPERATORS: phf::Map<&'static str, TokenType> = phf_map! {
