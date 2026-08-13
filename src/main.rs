@@ -8,6 +8,7 @@ mod lexer;
 mod parser;
 mod node;
 mod ast_printer;
+mod error;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("hello!");
@@ -32,7 +33,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let statements = parser.parse();
     println!("parser finished parsing");
 
-    ast_printer::ASTPrinter::print_program(&*statements);
+    let mut printer = ast_printer::AstTreePrinter::new();
+    printer.print_program(&statements);
 
     Ok(())
 }

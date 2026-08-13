@@ -1,120 +1,174 @@
-use crate::node::{Expression, Statement};
-use crate::token::TokenType;
+use crate::node::{Statement, Expression};
 
-pub struct ASTPrinter;
+pub struct AstTreePrinter {
+    indent_level: usize,
+}
 
-impl ASTPrinter {
-    pub fn print_program(statements: &[Statement]) {
-        for (i, stmt) in statements.iter().enumerate() {
-            println!("[Statement {}]", i);
-            Self::print_statement(stmt, 1);
+impl AstTreePrinter {
+    pub fn new() -> Self {
+        Self { indent_level: 0 }
+    }
+
+    fn indent(&mut self) {
+        self.indent_level += 1;
+    }
+
+    fn outdent(&mut self) {
+        if self.indent_level > 0 {
+            self.indent_level -= 1;
         }
     }
 
-    fn print_statement(stmt: &Statement, depth: usize) {
-        let indent = "  ".repeat(depth);
+    fn p(&self, text: &str) -> String {
+        format!("{}{}\n", "  ".repeat(self.indent_level), text)
+    }
+
+    pub fn print_program(&mut self, statements: &[Statement]) {
+        for stmt in statements {
+            print!("{}", self.print_statement(stmt));
+        }
+    }
+
+    pub fn print_statement(&mut self, stmt: &Statement) -> String {
         match stmt {
-            Statement::Return(expr) => {
-                println!("{indent}Return:");
-                if expr.is_none() {
-                    println!("{indent}  (Empty)")
-                } else {
-                    for exp in expr.iter() {
-                        Self::print_expression(exp, depth + 3);
-                    }
+            Statement::VariableDeclaration { mutable, name, ty, value } => {
+                let mut r = self.p(&format!("VariableDeclaration (name: '{}', mut: {})", name, mutable));
+                self.indent();
+                if let Some(t) = ty {
+                    r.push_str(&self.p(&format!("Type: {:?}", t)));
                 }
-            }
-            Statement::FunctionDeclaration { name, params, body } => {
-                println!("{indent}FunctionDeclaration:");
-                println!("{indent}  Name: {name}");
-                println!("{indent}  Params: {:?}", params);
-                println!("{indent}  Body:");
-                if body.is_empty() {
-                    println!("{indent}    (Empty)");
-                } else {
-                    for (i, child_stmt) in body.iter().enumerate() {
-                        println!("{indent}    [Inner Statement {}]", i);
-                        Self::print_statement(child_stmt, depth + 3);
-                    }
+                if let Some(v) = value {
+                    r.push_str(&self.p("Value:"));
+                    self.indent();
+                    r.push_str(&self.print_expression(v));
+                    self.outdent();
                 }
+                self.outdent();
+                r
             }
+
             Statement::Assignment { target, value } => {
-                println!("{indent}Assignment:");
-                println!("{indent}  Target:");
-                Self::print_expression(target, depth + 2);
-                println!("{indent}  Value:");
-                Self::print_expression(value, depth + 2);
+                let mut r = self.p("Assignment");
+                self.indent();
+                r.push_str(&self.p("Target:"));
+                self.indent();
+                r.push_str(&self.print_expression(target));
+                self.outdent();
+                r.push_str(&self.p("Value:"));
+                self.indent();
+                r.push_str(&self.print_expression(value));
+                self.outdent();
+                self.outdent();
+                r
             }
-            Statement::If { condition, then_branch, else_branch } => {
-                println!("{indent}IfStatement:");
-                println!("{indent}  Condition:");
-                Self::print_expression(condition, depth + 2);
-                println!("{indent}  Then:");
-                for child_stmt in then_branch {
-                    Self::print_statement(child_stmt, depth + 2);
-                }
-                if let Some(else_stmts) = else_branch {
-                    println!("{indent}  Else:");
-                    for child_stmt in else_stmts {
-                        Self::print_statement(child_stmt, depth + 2);
-                    }
-                }
-            }
+
             Statement::Expression(expr) => {
-                println!("{indent}ExpressionStatement:");
-                Self::print_expression(expr, depth + 1);
+                let mut r = self.p("ExpressionStatement");
+                self.indent();
+                r.push_str(&self.print_expression(expr));
+                self.outdent();
+                r
+            }
+
+            Statement::Return(value) => {
+                let mut r = self.p("Return");
+                if let Some(expr) = value {
+                    self.indent();
+                    r.push_str(&self.print_expression(expr));
+                    self.outdent();
+                }
+                r
+            }
+
+            Statement::If { condition, then_branch, else_branch } => {
+                let mut r = self.p("IfStatement");
+                self.indent();
+                r.push_str(&self.p("Condition:"));
+                self.indent();
+                r.push_str(&self.print_expression(condition));
+                self.outdent();
+
+                r.push_str(&self.p("Then:"));
+                self.indent();
+                for stmt in then_branch {
+                    r.push_str(&self.print_statement(stmt));
+                }
+                self.outdent();
+
+                if let Some(else_stmts) = else_branch {
+                    r.push_str(&self.p("Else:"));
+                    self.indent();
+                    for stmt in else_stmts {
+                        r.push_str(&self.print_statement(stmt));
+                    }
+                    self.outdent();
+                }
+                self.outdent();
+                r
+            }
+
+            Statement::FunctionDeclaration { name, params, body } => {
+                let mut r = self.p(&format!("FunctionDeclaration (name: '{}')", name));
+                self.indent();
+                r.push_str(&self.p(&format!("Params: {:?}", params)));
+                r.push_str(&self.p("Body:"));
+                self.indent();
+                for stmt in body {
+                    r.push_str(&self.print_statement(stmt));
+                }
+                self.outdent();
+                self.outdent();
+                r
             }
         }
     }
 
-
-    fn print_expression(expr: &Expression, depth: usize) {
-        let indent = "  ".repeat(depth);
+    pub fn print_expression(&mut self, expr: &Expression) -> String {
+        let mut r = String::new();
         match expr {
-            Expression::Identifier(val) => {
-                println!("{indent}Identifier: {val}");
-            }
-            Expression::Integer(val) => {
-                println!("{indent}Integer: {val}");
-            },
-            Expression::Float(val) => {
-                println!("{indent}Float: {val}");
-            }
-            Expression::StringLiteral(val) => {
-                println!("{indent}StringLiteral: \"{val}\"");
-            }
-            Expression::ObjectLiteral(fields) => {
-                println!("{indent}ObjectLiteral:");
-                for (key, val) in fields {
-                    println!("{indent}  Field: {key}");
-                    Self::print_expression(val, depth + 2);
-                }
-            }
+            Expression::Identifier(name) => r.push_str(&self.p(&format!("Identifier('{}')", name))),
+            Expression::Integer(val) => r.push_str(&self.p(&format!("Integer({})", val))),
+            Expression::Float(val) => r.push_str(&self.p(&format!("Float({})", val))),
+            Expression::String(val) => r.push_str(&self.p(&format!("String(\"{}\")", val))),
+            Expression::Boolean(val) => r.push_str(&self.p(&format!("Boolean({})", val))),
+
             Expression::BinaryOp { left, op, right } => {
-                println!("{indent}BinaryOp '{value}'", value = op.value);
-                println!("{indent}  Left:");
-                Self::print_expression(left, depth + 2);
-                println!("{indent}  Right:");
-                Self::print_expression(right, depth + 2);
+                r.push_str(&self.p(&format!("BinaryOp ({:?})", op)));
+                self.indent();
+                r.push_str(&self.print_expression(left));
+                r.push_str(&self.print_expression(right));
+                self.outdent();
             }
-            // Expression::PropertyAccess { object, property } => {
-            //     println!("{indent}PropertyAccess:");
-            //     println!("{indent}  Object:");
-            //     Self::print_expression(object, depth + 2);
-            //     println!("{indent}  Property: {property}");
-            // }
+
+            Expression::PropertyAccess { object, property } => {
+                r.push_str(&self.p("PropertyAccess"));
+                self.indent();
+                r.push_str(&self.print_expression(object));
+                r.push_str(&self.print_expression(property));
+                self.outdent();
+            }
+
             Expression::Call { callee, args } => {
-                println!("{indent}Call (Callee: {callee}):");
-                if args.is_empty() {
-                    println!("{indent}  Args: None");
-                } else {
-                    println!("{indent}  Args:");
-                    for arg in args {
-                        Self::print_expression(arg, depth + 2);
-                    }
+                r.push_str(&self.p(&format!("Call (callee: '{}')", callee)));
+                self.indent();
+                for arg in args {
+                    r.push_str(&self.print_expression(arg));
                 }
-            },
-            _ => {}
+                self.outdent();
+            }
+
+            Expression::Object(fields) => {
+                r.push_str(&self.p("Object"));
+                self.indent();
+                for (name, expr) in fields {
+                    r.push_str(&self.p(&format!("Field '{}':", name)));
+                    self.indent();
+                    r.push_str(&self.print_expression(expr));
+                    self.outdent();
+                }
+                self.outdent();
+            }
         }
+        r
     }
 }

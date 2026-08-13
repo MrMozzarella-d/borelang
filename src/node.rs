@@ -1,12 +1,13 @@
-use crate::token::Token;
+use crate::token::{Token, TokenData};
 
 #[derive(Debug)]
 pub enum Expression<'a> {
     Identifier(&'a str),
     Integer(i64),
     Float(f64),
-    StringLiteral(String),
-    ObjectLiteral(Vec<(&'a str, Expression<'a>)>),
+    String(&'a str),
+    Boolean(bool),
+    Object(Vec<(&'a str, Expression<'a>)>),
 
     BinaryOp {
         left: Box<Expression<'a>>,
@@ -18,7 +19,7 @@ pub enum Expression<'a> {
         property: Box<Expression<'a>>,
     },
     Call {
-        callee: &'a str,
+        callee: &'a str, // todo: change this to a expression
         args: Vec<Expression<'a>>,
     }
 }
@@ -38,6 +39,25 @@ pub enum Statement<'a> {
         params: Vec<&'a str>,
         body: Vec<Statement<'a>>,
     },
+    VariableDeclaration {
+        mutable: bool,
+        name: &'a str,
+        ty: Option<Type>,
+        value: Option<Expression<'a>>,
+    },
     Return(Option<Expression<'a>>),
     Expression(Expression<'a>),
+}
+
+#[derive(Debug)]
+pub enum Type {
+    Str,
+    Int,
+}
+pub fn get_type(name: &str) -> Option<Type> {
+    match name {
+        "str" => Some(Type::Str),
+        "int" => Some(Type::Int),
+        _ => None,
+    }
 }

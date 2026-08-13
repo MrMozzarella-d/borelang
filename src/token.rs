@@ -1,91 +1,104 @@
 use phf::phf_map;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum TokenType {
-    Identifier,
-    Int,
-    Float,
-    StringLiteral,              
-    // operators                //all done
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum TokenData<'a> {
+    // =
     Equal,
-    CompEqual,
-    Plus,
-    PlusEqual,
-    Minus,
-    MinusEqual,
-    Multiply,
-    MultiplyEqual,
-    Divide,
-    DivideEqual,
-    // keywords //all done
-    KwIf,
-    KwElse,
-    KwReturn,
-    KwBreak,
-    KwWhile,
-    KwFor,
-    KwLet,
-    KwFunction,
-    KwMut,
-    KwExtern,
-    KwAs,
-    // punctuation //all done
-    BraceLeft,      // {
-    BraceRight,     // }
-    BracketLeft,    // [
-    BracketRight,   // ]
-    ParenLeft,      // (
-    ParenRight,     // )
+    // ==
+    Equivalent,
+    // +
+    Add,
+    // +=
+    AddAssign,
+    // -
+    Sub,
+    // -=
+    SubAssign,
+    // *
+    Mul,
+    // *=
+    MulAssign,
+    // /
+    Div,
+    // /=
+    DivAssign,
+    // !=
+    NotEqual,
+    // <
+    LessThan,
+    // <=
+    LessThanEqual,
+    // >
+    GreaterThan,
+    // >=
+    GreaterThanEqual,
+    // {
+    OpenBody,
+    // }
+    CloseBody, 
+    // [
+    BracketLeft,
+    // ]
+    BracketRight,
+    // (
+    OpenParen,
+    // )
+    CloseParen, 
+    // ;
+    Semicolon,
+    // ;;
+    Return,
+    // ,
     Comma,
+    // :
     Colon,
+    // .
     Dot,
-
+    // true or false
+    BooleanLiteral(bool),
+    // "<string>"
+    StringLiteral(&'a str),
+    // '<char>'
+    CharacterLiteral(char),
+    // <0-9>..
+    IntegerLiteral(i64),
+    // <0.00-9.99>..
+    FloatLiteral(f64),
+    // any word
+    Literal(&'a str),
+    // nothing
     EOF,
 }
+
 #[derive(Debug, Copy, Clone)]
-pub struct  Token<'a> {
-    pub(crate) token_type: TokenType,
-    pub(crate) value: &'a str,
+pub struct Token<'a> {
+    pub(crate) token_data: TokenData<'a>,
     pub(crate) line: usize,
     pub(crate) column: usize,
 }
 impl<'a> Token<'a> {
-    pub fn new(token_type: TokenType, value: &'a str, line: usize, column: usize) -> Self {
-        Self { token_type, value, line, column, }
-    }
-    pub(crate) fn is_operator(&self) -> bool {
-        OPERATORS.values().any(|&x| x == self.token_type)
+    pub fn new(token_data: TokenData<'a>, line: usize, column: usize) -> Self { // we dont need value anymore
+        Self { token_data, line, column, }
     }
     pub(crate) fn is_atomic(&self) -> bool {
-        matches!( self.token_type,
-              TokenType::Identifier
-            | TokenType::Number
-            | TokenType::StringLiteral
+        matches!( self.token_data,
+              TokenData::Literal(_)
+            | TokenData::IntegerLiteral(_)
+            | TokenData::FloatLiteral(_)
+            | TokenData::StringLiteral(_)
         )
     }
 }
 
-pub static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
-    "if" => TokenType::KwIf,
-    "else" => TokenType::KwElse,
-    "return" => TokenType::KwReturn,
-    "as" => TokenType::KwAs,
-    "break" => TokenType::KwBreak,
-    "ext" => TokenType::KwExtern,
-    "fn" => TokenType::KwFunction,
-    "let" => TokenType::KwLet,
-    "mut" => TokenType::KwMut,
-};
-
-pub static OPERATORS: phf::Map<&'static str, TokenType> = phf_map! {
-    "+" => TokenType::Plus,
-    "+=" => TokenType::PlusEqual,
-    "-" => TokenType::Minus,
-    "-=" => TokenType::MinusEqual,
-    "/" => TokenType::Divide,
-    "/=" => TokenType::DivideEqual,
-    "*" => TokenType::Multiply,
-    "*=" => TokenType::MultiplyEqual,
-    "=" => TokenType::Equal,
-    "==" => TokenType::CompEqual,
+pub static OPERATORS: phf::Map<&'static str, TokenData> = phf_map! {
+    "+" => TokenData::Add,
+    "+=" => TokenData::AddAssign,
+    "-" => TokenData::Sub,
+    "-=" => TokenData::SubAssign,
+    "/" => TokenData::Div,
+    "/=" => TokenData::DivAssign,
+    "*" => TokenData::Mul,
+    "*=" => TokenData::MulAssign,
+    "=" => TokenData::Equal,
+    "==" => TokenData::Equivalent,
 };

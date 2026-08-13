@@ -1,5 +1,7 @@
-use crate::node::{Expression, Statement};
-use crate::token::{Token, TokenType};
+use std::ptr::null;
+use crate::node::{get_type, Expression, Statement, Type};
+use crate::token::{Token, TokenData};
+use crate::error::SyntaxError;
 
 pub struct Parser<'a> {
     tokens: Vec<Token<'a>>,
@@ -22,62 +24,69 @@ impl<'a> Parser<'a> {
             &self.tokens[self.tokens.len() - 1] // return eof
         }
     }
-    fn expect(&mut self, expected_type: TokenType) -> Option<&Token<'a>> {
+    fn expect(&mut self, expected_type: TokenData) -> Option<&Token<'a>> {
         let token = self.advance();
-        if token.token_type != expected_type {
-            eprintln!("Expected type {:?}, but got type {:?} at {}:{}", expected_type, token.token_type, token.line, token.column);
+        if token.token_data != expected_type {
+            eprintln!("Expected type {:?}, but got type {:?} at {}:{}", expected_type, token.token_data, token.line, token.column);
             return None
         }
         Some(token)
     }
-    fn peek_expect(&self, expected_type: TokenType) -> Option<&Token<'a>> {
-        if let Some(token) = self.peek() {
-            if token.token_type != expected_type {
-                eprintln!("Expected type {:?}, but got type {:?} at {}:{}", expected_type, token.token_type, token.line, token.column);
-                return None
-            }
-            return Some(token)
-        };
-        None
-    }
-    fn expect_one_of(&mut self, expected_types: Vec<TokenType>) -> Option<&Token<'a>> {
-        let token = self.advance();
-        let mut got = false;
-        for expected in expected_types.iter() {
-            if token.token_type == *expected {
-                got = true;
-            };
-        };
-        if got {
-            Some(token)
-        } else {
-            eprint!("Expected one of ");
-            for exp in expected_types.iter() {
-                eprint!("{:?}, ", *exp);
-            }
-            eprintln!("but got {:?} at {}:{}.", token.token_type, token.line, token.column);
-            None
+    // fn peek_expect(&self, expected_type: TokenData) -> Option<&Token<'a>> {
+    //     if let Some(token) = self.peek() {
+    //         if token.token_data != expected_type {
+    //             eprintln!("Expected type {:?}, but got type {:?} at {}:{}", expected_type, token.token_data, token.line, token.column);
+    //             return None
+    //         }
+    //         return Some(token)
+    //     };
+    //     None
+    // }
+    // fn expect_one_of(&mut self, expected_types: Vec<TokenData>) -> Option<&Token<'a>> {
+    //     let token = self.advance();
+    //     let mut got = false;
+    //     for expected in expected_types.iter() {
+    //         if token.token_data == *expected {
+    //             got = true;
+    //         };
+    //     };
+    //     if got {
+    //         Some(token)
+    //     } else {
+    //         eprint!("Expected one of ");
+    //         for exp in expected_types.iter() {
+    //             eprint!("{:?}, ", *exp);
+    //         }
+    //         eprintln!("but got {:?} at {}:{}.", token.token_data, token.line, token.column);
+    //         None
+    //     }
+    //
+    // }
+    fn expect_literal(&mut self) -> Result<&'a str, SyntaxError> {
+        match self.advance() {
+            Token { token_data: TokenData::Literal(value), .. } => Ok(value),
+            _ => Err(SyntaxError::ExpectedLiteral),
         }
 
     }
     fn peek(&self) -> Option<&Token<'a>> {
         self.tokens.get(self.current)
     }
-    fn peek_next(&self) -> Option<&Token<'a>> {
-        if self.current + 1 >= self.tokens.len() || self.tokens.get(self.current+1)?.token_type == TokenType::EOF {
-            return None
-        }
-        self.tokens.get(self.current+1)
-    }
+    // fn peek_next(&self) -> Option<&Token<'a>> {
+    //     if self.current + 1 >= self.tokens.len() || self.tokens.get(self.current+1)?.token_data == TokenData::EOF {
+    //         return None
+    //     }
+    //     self.tokens.get(self.current+1)
+    // }
     //fn is_at_end(&mut self) -> bool {
     //    let peek = self.peek().unwrap();
-    //    peek.token_type == TokenType::EOF
+    //    peek.token_type == TokenData::EOF
     //}
     pub(crate) fn parse(&mut self) -> Vec<Statement<'a>> {
         let mut statement_vec: Vec<Statement<'a>> = Vec::new();
         while self.current < self.tokens.len() {
             if let Some(token) = self.peek() {
-                if token.token_type == TokenType::EOF {
+                if token.token_data == TokenData::EOF {
                     break;
                 }
             } else {
@@ -92,129 +101,98 @@ impl<'a> Parser<'a> {
         statement_vec
     }
     fn parse_statement(&mut self) -> Option<Statement<'a>> {
-        let token_type = self.peek()?.token_type;
+        let token_type = &self.peek()?.token_data;
         match token_type {
-            TokenType::KwProc => {
-                self.advance(); // consume proc, to name
-                let name_token = self.expect(TokenType::Identifier)?;
-                let proc_name = name_token.value;
-                self.expect(TokenType::ParenLeft);
-                let mut params = Vec::new();
-                while self.current < self.tokens.len() {
-                    if self.peek()?.token_type == TokenType::ParenRight {
-                        break;
-                    }
-                    let param = self.expect(TokenType::Identifier)?;
-                    params.push(param.value);
-                    if self.peek()?.token_type == TokenType::Comma {
-                        self.advance();
-                    }
+            TokenData::Literal(name) => {
+                match name {
+                    &"fn" => {
+                        return self.parse_function();
+                    },
+                    &"let" => {
+                        return self.parse_var(false);
+                    },
+                    &"mut" => {
+                        return self.parse_var(true);
+                    },
+                    _ => {}
                 }
-                self.expect(TokenType::ParenRight);
-                self.expect(TokenType::BraceLeft);
-                let mut body: Vec<Statement<'a>> = Vec::new();
-                while self.current < self.tokens.len() {
-                    if self.peek()?.token_type == TokenType::BraceRight {
-                        break;
-                    }
-                    if let Some(stmt) = self.parse_statement() {
-                        body.push(stmt);
-                    } else {
-                        self.advance();
-                    }
-                }
-                self.expect(TokenType::BraceRight);
-                let stmt = Statement::new_procedure(proc_name, params, body);
-                Some(stmt)
-            },
-            TokenType::Identifier => {
-                let callee_token = self.advance(); // consume identifier
-                let callee = callee_token.value;
-                if self.peek().map(|t| t.token_type == TokenType::ParenLeft)? {
-                    self.expect(TokenType::ParenLeft);
+                let callee = self.expect_literal().unwrap(); // consume identifier
+                if self.peek().map(|t| t.token_data == TokenData::OpenParen)? {
+                    self.expect(TokenData::OpenParen);
                     let mut expr_vec = Vec::new();
                     while self.current < self.tokens.len() {
-                        if self.peek()?.token_type == TokenType::ParenRight {
+                        if self.peek()?.token_data == TokenData::CloseParen {
                             break;
                         }
                         let arg_expr = self.parse_expression(0)?;
                         expr_vec.push(arg_expr);
 
-                        if self.peek()?.token_type == TokenType::Comma {
+                        if self.peek()?.token_data == TokenData::Comma {
                             self.advance();
                         }
                     };
-                    self.expect(TokenType::ParenRight);
+                    self.expect(TokenData::CloseParen);
 
-                    let stmt = Statement::new_call(callee, expr_vec);
+                    let stmt = Statement::Expression(Expression::Call {callee, args: expr_vec});
                     return Some(stmt)
                 }
                 let t = self.advance();
                 eprintln!("Expected call when parsing identifier at {}:{}.", t.line, t.column);
                 None
             },
-            TokenType::KwReturn => {
-                self.advance(); // consume return kw
-                if self.peek().map(|t| t.is_atomic())? { // because parse_expression would error if it doesnt get a value we check it here first
-                    let expr = self.parse_expression(0)?;           // (that whiny ass bitch)
-                    let stmt = Statement::Return(Some(expr));
-                    return Some(stmt)
-                };
-                let stmt = Statement::Return(None);
-                Some(stmt)
-            },
+            TokenData::Return => { self.parse_return() },
             _ => None,
         }
     }
-    fn get_importance(&self, token_type: TokenType) -> usize {
+    fn get_importance(&self, token_type: TokenData) -> usize {
         match token_type {
-            TokenType::Equal | TokenType::PlusEqual | TokenType::MinusEqual | TokenType::MultiplyEqual | TokenType::DivideEqual => 1,
-            TokenType::CompEqual => 2,
-            TokenType::Plus | TokenType::Minus => 3,
-            TokenType::Multiply | TokenType::Divide => 4,
+            TokenData::Equal | TokenData::AddAssign | TokenData::SubAssign | TokenData::MulAssign | TokenData::DivAssign => 1,
+            TokenData::Equivalent => 2,
+            TokenData::Add | TokenData::Sub => 3,
+            TokenData::Mul | TokenData::Div => 4,
             _ => 0,
         }
     }
     fn parse_expression(&mut self, min_importance: usize) -> Option<Expression<'a>> {
         let left = self.advance();
-        let mut left_expr = match left.token_type {
-            TokenType::Int => Expression::Integer(left.value.parse().unwrap()),
-            TokenType::Float => Expression::Float(left.value.parse().unwrap()),
-            TokenType::StringLiteral => Expression::StringLiteral(left.value.parse().unwrap()),
-            TokenType::Identifier => {
-                let id = left.value;
-                if self.peek().map(|t| t.token_type) == Some(TokenType::ParenLeft) { // function
+        let mut left_expr = match left.token_data {
+            TokenData::IntegerLiteral(v) => Expression::Integer(v),
+            TokenData::FloatLiteral(v) => Expression::Float(v),
+            TokenData::StringLiteral(v) => Expression::String(v),
+            TokenData::Literal(v) => {
+                if self.peek().map(|t| t.token_data == TokenData::OpenParen)? { // function
                     self.advance(); // consume the parenLeft
                     let mut args = Vec::new();
                     while self.current < self.tokens.len() {
-                        if self.peek().map(|t| t.token_type) == Some(TokenType::ParenRight) {
+                        if self.peek().map(|t| t.token_data == TokenData::CloseParen)? {
                             break;
                         }
                         let arg_expr = self.parse_expression(0)?;
                         args.push(arg_expr);
 
-                        if self.peek()?.token_type == TokenType::Comma {
+                        if self.peek()?.token_data == TokenData::Comma {
                             self.advance();
                         }
                     }
-                    self.expect(TokenType::ParenRight);
+                    self.expect(TokenData::CloseParen);
                     Expression::Call {
-                        callee: id,
+                        callee: v,
                         args
                     }
                 } else {
-                    Expression::Identifier(id)
+                    Expression::Identifier(v)
                 }
             },
             _ => {
-                eprint!("Syntax Error: Expected Number, String or Identifier {}:{}, but got {:?}.", left.line, left.column, left.token_type);
+                eprint!("Syntax Error: Expected Number, String or Identifier {}:{}, but got {:?}.", left.line, left.column, left.token_data);
                 return None;
             }
         };
-        while let Some(next) = self.peek().map(|t| t.token_type) {
-            if next == TokenType::Dot {
+        while let Some(token) = self.peek().map(|t| t) {
+            let next = token.token_data;
+            if next == TokenData::Dot {
                 
-            } else if next == TokenType::ParenLeft {
+            } else if next == TokenData::OpenBody {
                 
             }
             let op_importance = self.get_importance(next);
@@ -230,5 +208,86 @@ impl<'a> Parser<'a> {
             }
         };
         Some(left_expr)
+    }
+
+    fn parse_function(&mut self) -> Option<Statement<'a>> {
+        self.advance(); // consume proc, to name
+        let func_name = self.expect_literal().unwrap();
+        self.expect(TokenData::OpenParen);
+        let mut params = Vec::new();
+        while self.current < self.tokens.len() {
+            if self.peek()?.token_data == TokenData::CloseParen {
+                break;
+            }
+            let param = self.expect_literal().unwrap();
+            params.push(param);
+            if self.peek()?.token_data == TokenData::Comma {
+                self.advance();
+            }
+        }
+        self.expect(TokenData::CloseParen);
+        self.expect(TokenData::OpenBody);
+        let mut body: Vec<Statement<'a>> = Vec::new();
+        while self.current < self.tokens.len() {
+            if self.peek()?.token_data == TokenData::CloseBody {
+                break;
+            }
+            if let Some(stmt) = self.parse_statement() {
+                body.push(stmt);
+            } else {
+                self.advance();
+            }
+        }
+        //self.expect(TokenData::CloseBody);
+        self.advance();
+        let stmt = Statement::FunctionDeclaration {
+            name: func_name,
+            params,
+            body
+        };
+        Some(stmt)
+    }
+    
+    fn parse_return(&mut self) -> Option<Statement<'a>> {
+        self.advance(); // consume return kw
+        if self.peek().map(|t| t.is_atomic())? { // because parse_expression would error if it doesnt get a value we check it here first
+            let expr = self.parse_expression(0)?;           // (that whiny ass bitch)
+            let stmt = Statement::Return(Some(expr));
+            return Some(stmt)
+        }
+        let stmt = Statement::Return(None);
+        Some(stmt)
+    }
+
+    fn parse_var(&mut self, mutable: bool) -> Option<Statement<'a>> {
+        self.advance(); // consume let/mut
+        let name = self.expect_literal().unwrap();
+        let mut ty: Option<Type> = None;
+
+        if self.peek().map(|t| t.token_data == TokenData::Colon)? { // vars can either have a set type or not
+            self.expect(TokenData::Colon); // consume colon
+            let literal = self.expect_literal().unwrap();
+            ty = get_type(literal);
+        }
+        if self.peek().map(|t| t.token_data == TokenData::Equal)? {
+            self.expect(TokenData::Equal); // consume equal
+            let expr = self.parse_expression(0);
+            let stmt = Statement::VariableDeclaration {
+                name,
+                ty,
+                mutable,
+                value: expr,
+            };
+            Some(stmt)
+        } else {
+            let stmt = Statement::VariableDeclaration {
+                name,
+                ty,
+                mutable,
+                value: None,
+            };
+            Some(stmt)
+        };
+        None
     }
 }

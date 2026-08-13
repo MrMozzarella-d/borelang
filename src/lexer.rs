@@ -1,5 +1,5 @@
 use crate::token;
-use crate::token::{Token, TokenType};
+use crate::token::{Token, TokenData};
 
 pub struct Lexer<'a> {
     source: &'a str,
@@ -39,8 +39,8 @@ impl<'a> Lexer<'a> {
     }
     fn is_at_end(&self) -> bool { self.current >= self.source.len() }
 
-    pub fn tokenize(&mut self) -> Vec<Token<'a>> {
-        let mut token_vec: Vec<Token<'a>> = Vec::new();
+    pub fn tokenize(&mut self) -> Vec<Token> {
+        let mut token_vec: Vec<Token> = Vec::new();
         while self.current < self.source.len() {
             let start_pos = self.current;
             let char = self.advance();
@@ -55,23 +55,14 @@ impl<'a> Lexer<'a> {
                 }
                 let end_pos = self.current;
                 let identifier = &self.source[start_pos..end_pos];
-                if token::KEYWORDS.contains_key(identifier) {
-                    token_vec.push(Token::new(
-                        *token::KEYWORDS.get(identifier).unwrap(),
-                        identifier,
-                        self.line,
-                        self.column,
-                    ));
-                } else {
-                    token_vec.push(Token::new(
-                        TokenType::Identifier,
-                        identifier,
-                        self.line,
-                        self.column,
-                    ));
-                }
+                token_vec.push(Token::new(
+                    TokenData::Literal(identifier),
+                    self.line,
+                    self.column,
+                ));
                 continue;
             }
+            
             if char.is_numeric() {
                 while self.current < self.source.len() {
                     let next = self.peek();
@@ -85,15 +76,13 @@ impl<'a> Lexer<'a> {
                 let val = &self.source[start_pos..end_pos];
                 if val.contains('.') {
                     token_vec.push(Token::new(
-                        TokenType::Float,
-                        val,
+                        TokenData::FloatLiteral(val.parse().unwrap()),
                         self.line,
                         self.column,
                     ));
                 } else { 
                     token_vec.push(Token::new(
-                            TokenType::Int,
-                            val,
+                            TokenData::IntegerLiteral(val.parse().unwrap()),
                             self.line,
                             self.column, 
                         )); 
@@ -108,16 +97,14 @@ impl<'a> Lexer<'a> {
                         self.advance(); // consume =
                         let op_str = &self.source[start_pos..self.current];
                         token_vec.push(Token::new(
-                            *token::OPERATORS.get(op_str).unwrap(),
-                            op_str,
+                            token::OPERATORS.get(op_str).unwrap().clone(),
                             self.line,
                             self.column,
                         ))
                     } else {
                         let op_str = &self.source[start_pos..self.current]; // same here because we dont step
                         token_vec.push(Token::new(                         // forward once..
-                            *token::OPERATORS.get(op_str).unwrap(),
-                            op_str,
+                            token::OPERATORS.get(op_str).unwrap().clone(),
                             self.line,
                             self.column,
                         ))
@@ -136,26 +123,30 @@ impl<'a> Lexer<'a> {
                     let text = &self.source[start_pos..end_pos];
                     self.advance(); // consume other "
                     token_vec.push(Token::new(
-                        TokenType::StringLiteral,
-                        text,
+                        TokenData::StringLiteral(text),
                         self.line,
                         self.column,
                     ));
                 },
-                '{' => token_vec.push(Token::new(TokenType::BraceLeft,   "{", self.line, self.column, )),
-                '}' => token_vec.push(Token::new(TokenType::BraceRight,  "}", self.line, self.column, )),
-                '[' => token_vec.push(Token::new(TokenType::BracketLeft, "[", self.line, self.column, )),
-                ']' => token_vec.push(Token::new(TokenType::BracketRight,"]", self.line, self.column, )),
-                '(' => token_vec.push(Token::new(TokenType::ParenLeft,   "(", self.line, self.column, )),
-                ')' => token_vec.push(Token::new(TokenType::ParenRight,  ")", self.line, self.column, )),
-                ',' => token_vec.push(Token::new(TokenType::Comma,       ",", self.line, self.column, )),
-                '.' => token_vec.push(Token::new(TokenType::Dot,         ".", self.line, self.column, )),
+                ';' => {
+                    if self.advance() == ';' {
+                        token_vec.push(Token::new(TokenData::Return, self.line, self.column))
+                    }  
+                },
+                ':' => token_vec.push(Token::new(TokenData::Colon, self.line, self.column)),
+                '{' => token_vec.push(Token::new(TokenData::OpenBody, self.line, self.column, )),
+                '}' => token_vec.push(Token::new(TokenData::CloseBody, self.line, self.column, )),
+                '[' => token_vec.push(Token::new(TokenData::BracketLeft, self.line, self.column, )),
+                ']' => token_vec.push(Token::new(TokenData::BracketRight, self.line, self.column, )),
+                '(' => token_vec.push(Token::new(TokenData::OpenParen, self.line, self.column, )),
+                ')' => token_vec.push(Token::new(TokenData::CloseParen, self.line, self.column, )),
+                ',' => token_vec.push(Token::new(TokenData::Comma, self.line, self.column, )),
+                '.' => token_vec.push(Token::new(TokenData::Dot, self.line, self.column, )),
                 _ => { continue; }
             }
         };
         token_vec.push(Token::new( // push EOF after done
-            TokenType::EOF,
-            "",
+            TokenData::EOF,
             self.line,
             self.column,
         ));
