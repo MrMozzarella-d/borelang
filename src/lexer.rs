@@ -142,6 +142,13 @@ impl<'a> Lexer<'a> {
                 ')' => token_vec.push(Token::new(TokenData::CloseParen, self.line, self.column, )),
                 ',' => token_vec.push(Token::new(TokenData::Comma, self.line, self.column, )),
                 '.' => token_vec.push(Token::new(TokenData::Dot, self.line, self.column, )),
+                '#' => {
+                    while self.current < self.source.len() {
+                        if self.peek() == '\n' {
+                            break
+                        } self.advance();
+                    }
+                }
                 _ => { continue; }
             }
         };

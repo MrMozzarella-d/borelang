@@ -1,0 +1,13 @@
+stone base: int = 42
+
+fn main() {
+    println("hi")
+    let score = base
+    score *= 42
+    if score == 4200 {
+        println("Oh wow, that is very interesting")
+    } else {
+        println("oh no...")
+    }
+    free(score)
+}

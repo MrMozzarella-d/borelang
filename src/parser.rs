@@ -287,7 +287,6 @@ impl<'a> Parser<'a> {
                 value: None,
             };
             Some(stmt)
-        };
-        None
+        }
     }
 }

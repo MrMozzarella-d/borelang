@@ -1,3 +1,4 @@
 fn main() {
     let i: int = 0
+    mut j: int = 0
 }

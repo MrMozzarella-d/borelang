@@ -3,7 +3,6 @@ use crate::node::{Statement, Expression};
 pub struct AstTreePrinter {
     indent_level: usize,
 }
-
 impl AstTreePrinter {
     pub fn new() -> Self {
         Self { indent_level: 0 }
@@ -12,23 +11,19 @@ impl AstTreePrinter {
     fn indent(&mut self) {
         self.indent_level += 1;
     }
-
     fn outdent(&mut self) {
         if self.indent_level > 0 {
             self.indent_level -= 1;
         }
     }
-
     fn p(&self, text: &str) -> String {
         format!("{}{}\n", "  ".repeat(self.indent_level), text)
     }
-
     pub fn print_program(&mut self, statements: &[Statement]) {
         for stmt in statements {
             print!("{}", self.print_statement(stmt));
         }
     }
-
     pub fn print_statement(&mut self, stmt: &Statement) -> String {
         match stmt {
             Statement::VariableDeclaration { mutable, name, ty, value } => {
@@ -46,7 +41,6 @@ impl AstTreePrinter {
                 self.outdent();
                 r
             }
-
             Statement::Assignment { target, value } => {
                 let mut r = self.p("Assignment");
                 self.indent();
@@ -61,7 +55,6 @@ impl AstTreePrinter {
                 self.outdent();
                 r
             }
-
             Statement::Expression(expr) => {
                 let mut r = self.p("ExpressionStatement");
                 self.indent();
@@ -69,7 +62,6 @@ impl AstTreePrinter {
                 self.outdent();
                 r
             }
-
             Statement::Return(value) => {
                 let mut r = self.p("Return");
                 if let Some(expr) = value {
@@ -79,7 +71,6 @@ impl AstTreePrinter {
                 }
                 r
             }
-
             Statement::If { condition, then_branch, else_branch } => {
                 let mut r = self.p("IfStatement");
                 self.indent();
@@ -106,7 +97,6 @@ impl AstTreePrinter {
                 self.outdent();
                 r
             }
-
             Statement::FunctionDeclaration { name, params, body } => {
                 let mut r = self.p(&format!("FunctionDeclaration (name: '{}')", name));
                 self.indent();
@@ -139,24 +129,34 @@ impl AstTreePrinter {
                 r.push_str(&self.print_expression(right));
                 self.outdent();
             }
-
             Expression::PropertyAccess { object, property } => {
                 r.push_str(&self.p("PropertyAccess"));
                 self.indent();
+
+                r.push_str(&self.p("Object:"));
+                self.indent();
                 r.push_str(&self.print_expression(object));
+                self.outdent();
+
+                r.push_str(&self.p("Property:"));
+                self.indent();
                 r.push_str(&self.print_expression(property));
                 self.outdent();
-            }
 
+                self.outdent();
+            }
             Expression::Call { callee, args } => {
                 r.push_str(&self.p(&format!("Call (callee: '{}')", callee)));
                 self.indent();
-                for arg in args {
-                    r.push_str(&self.print_expression(arg));
+
+                if !args.is_empty() {
+                    for arg in args {
+                        r.push_str(&self.print_expression(arg));
+                    }
                 }
+
                 self.outdent();
             }
-
             Expression::Object(fields) => {
                 r.push_str(&self.p("Object"));
                 self.indent();
