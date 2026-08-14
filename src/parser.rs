@@ -1,4 +1,3 @@
-use std::ptr::null;
 use crate::node::{get_type, Expression, Statement, Type};
 use crate::token::{Token, TokenData};
 use crate::error::SyntaxError;
@@ -101,44 +100,23 @@ impl<'a> Parser<'a> {
         statement_vec
     }
     fn parse_statement(&mut self) -> Option<Statement<'a>> {
-        let token_type = &self.peek()?.token_data;
+        let token_type = self.peek()?.token_data;
         match token_type {
             TokenData::Literal(name) => {
                 match name {
-                    &"fn" => {
-                        return self.parse_function();
+                    "fn" => {
+                        self.parse_function()
                     },
-                    &"let" => {
-                        return self.parse_var(false);
+                    "let" => {
+                        self.parse_var(false)
                     },
-                    &"mut" => {
-                        return self.parse_var(true);
+                    "mut" => {
+                        self.parse_var(true)
                     },
-                    _ => {}
+                    _ => {
+                        Some(Statement::Expression(self.parse_expression(0)?))
+                    },
                 }
-                let callee = self.expect_literal().unwrap(); // consume identifier
-                if self.peek().map(|t| t.token_data == TokenData::OpenParen)? {
-                    self.expect(TokenData::OpenParen);
-                    let mut expr_vec = Vec::new();
-                    while self.current < self.tokens.len() {
-                        if self.peek()?.token_data == TokenData::CloseParen {
-                            break;
-                        }
-                        let arg_expr = self.parse_expression(0)?;
-                        expr_vec.push(arg_expr);
-
-                        if self.peek()?.token_data == TokenData::Comma {
-                            self.advance();
-                        }
-                    };
-                    self.expect(TokenData::CloseParen);
-
-                    let stmt = Statement::Expression(Expression::Call {callee, args: expr_vec});
-                    return Some(stmt)
-                }
-                let t = self.advance();
-                eprintln!("Expected call when parsing identifier at {}:{}.", t.line, t.column);
-                None
             },
             TokenData::Return => { self.parse_return() },
             _ => None,
@@ -150,6 +128,7 @@ impl<'a> Parser<'a> {
             TokenData::Equivalent => 2,
             TokenData::Add | TokenData::Sub => 3,
             TokenData::Mul | TokenData::Div => 4,
+            TokenData::Dot | TokenData::OpenParen => 10,
             _ => 0,
         }
     }
@@ -159,60 +138,76 @@ impl<'a> Parser<'a> {
             TokenData::IntegerLiteral(v) => Expression::Integer(v),
             TokenData::FloatLiteral(v) => Expression::Float(v),
             TokenData::StringLiteral(v) => Expression::String(v),
-            TokenData::Literal(v) => {
-                if self.peek().map(|t| t.token_data == TokenData::OpenParen)? { // function
-                    self.advance(); // consume the parenLeft
-                    let mut args = Vec::new();
+            TokenData::Literal(v) => Expression::Identifier(v),
+            TokenData::BooleanLiteral(v) => Expression::Boolean(v),
+            _ => {
+                eprintln!("Syntax Error: Expected Integer, Float, Boolean, String or Literal at {}:{}, but got {:?}.", left.line, left.column, left.token_data);
+                return None;
+            }
+        };
+        while let Some(token) = self.peek().map(|t| t) {
+            let next = token.token_data;
+            match next {
+                TokenData::Dot => { 
+                    let op_importance = self.get_importance(next);
+                    if op_importance <= min_importance {
+                        break;
+                    }
+                    self.advance(); // consume dot
+                    let property = self.expect_literal().unwrap();
+                    let expr = Expression::PropertyAccess {
+                        object: Box::new(left_expr),
+                        property,
+                    };
+                    left_expr = expr;
+                },
+                TokenData::OpenParen => {
+                    let op_importance = self.get_importance(next);
+                    if op_importance <= min_importance {
+                        break;
+                    }
+                    self.advance();
+                    let mut expr_vec = Vec::new();
                     while self.current < self.tokens.len() {
-                        if self.peek().map(|t| t.token_data == TokenData::CloseParen)? {
+                        if self.peek()?.token_data == TokenData::CloseParen {
                             break;
                         }
                         let arg_expr = self.parse_expression(0)?;
-                        args.push(arg_expr);
+                        expr_vec.push(arg_expr);
 
                         if self.peek()?.token_data == TokenData::Comma {
                             self.advance();
                         }
                     }
                     self.expect(TokenData::CloseParen);
-                    Expression::Call {
-                        callee: v,
-                        args
+                    let expr = Expression::Call {
+                        callee: Box::new(left_expr),
+                        args: expr_vec,
+                    };
+                    left_expr = expr;
+                },
+                _ => {
+                    let op_importance = self.get_importance(next);
+                    if op_importance <= min_importance {
+                        break;
                     }
-                } else {
-                    Expression::Identifier(v)
+                    let op = *self.advance();
+                    let right_expr = self.parse_expression(op_importance)?;
+                    left_expr = Expression::BinaryOp {
+                        left: Box::new(left_expr),
+                        op,
+                        right: Box::new(right_expr),
+                    }
                 }
-            },
-            _ => {
-                eprint!("Syntax Error: Expected Number, String or Identifier {}:{}, but got {:?}.", left.line, left.column, left.token_data);
-                return None;
             }
-        };
-        while let Some(token) = self.peek().map(|t| t) {
-            let next = token.token_data;
-            if next == TokenData::Dot {
-                
-            } else if next == TokenData::OpenBody {
-                
-            }
-            let op_importance = self.get_importance(next);
-            if op_importance <= min_importance {
-                break;
-            }
-            let op = *self.advance();
-            let right_expr = self.parse_expression(op_importance)?;
-            left_expr = Expression::BinaryOp {
-                left: Box::new(left_expr),
-                op,
-                right: Box::new(right_expr),
-            }
+            
         };
         Some(left_expr)
     }
 
     fn parse_function(&mut self) -> Option<Statement<'a>> {
         self.advance(); // consume proc, to name
-        let func_name = self.expect_literal().unwrap();
+        let func_name = self.expect_literal().unwrap(); println!("  func {}", func_name);
         self.expect(TokenData::OpenParen);
         let mut params = Vec::new();
         while self.current < self.tokens.len() {
@@ -249,6 +244,7 @@ impl<'a> Parser<'a> {
     }
     
     fn parse_return(&mut self) -> Option<Statement<'a>> {
+        println!("  return");
         self.advance(); // consume return kw
         if self.peek().map(|t| t.is_atomic())? { // because parse_expression would error if it doesnt get a value we check it here first
             let expr = self.parse_expression(0)?;           // (that whiny ass bitch)
@@ -263,7 +259,7 @@ impl<'a> Parser<'a> {
         self.advance(); // consume let/mut
         let name = self.expect_literal().unwrap();
         let mut ty: Option<Type> = None;
-
+        println!("  var {}", name);
         if self.peek().map(|t| t.token_data == TokenData::Colon)? { // vars can either have a set type or not
             self.expect(TokenData::Colon); // consume colon
             let literal = self.expect_literal().unwrap();

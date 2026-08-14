@@ -39,7 +39,7 @@ impl<'a> Lexer<'a> {
     }
     fn is_at_end(&self) -> bool { self.current >= self.source.len() }
 
-    pub fn tokenize(&mut self) -> Vec<Token> {
+    pub fn tokenize(&mut self) -> Vec<Token<'_>> {
         let mut token_vec: Vec<Token> = Vec::new();
         while self.current < self.source.len() {
             let start_pos = self.current;
@@ -55,6 +55,14 @@ impl<'a> Lexer<'a> {
                 }
                 let end_pos = self.current;
                 let identifier = &self.source[start_pos..end_pos];
+                if identifier == "false" || identifier == "true" {
+                    token_vec.push(Token::new(
+                        TokenData::BooleanLiteral(identifier == "true"),
+                        self.line,
+                        self.column,
+                    ));
+                    continue
+                }
                 token_vec.push(Token::new(
                     TokenData::Literal(identifier),
                     self.line,
@@ -92,7 +100,7 @@ impl<'a> Lexer<'a> {
 
             match char {
                 ' ' | '\n' |  '\r' |  '\t'  => { continue; },
-                '+' | '/' | '*' | '=' | '-' => {
+                '+' | '/' | '*' | '=' | '-' | '!' | '<' | '>' => {
                     if self.peek() == '=' {
                         self.advance(); // consume =
                         let op_str = &self.source[start_pos..self.current];
@@ -131,7 +139,9 @@ impl<'a> Lexer<'a> {
                 ';' => {
                     if self.advance() == ';' {
                         token_vec.push(Token::new(TokenData::Return, self.line, self.column))
-                    }  
+                    } else {
+                        token_vec.push(Token::new(TokenData::Semicolon, self.line, self.column))
+                    }
                 },
                 ':' => token_vec.push(Token::new(TokenData::Colon, self.line, self.column)),
                 '{' => token_vec.push(Token::new(TokenData::OpenBody, self.line, self.column, )),

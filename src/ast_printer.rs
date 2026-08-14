@@ -37,6 +37,8 @@ impl AstTreePrinter {
                     self.indent();
                     r.push_str(&self.print_expression(v));
                     self.outdent();
+                } else {
+                    r.push_str(&self.p("No value assigned"));
                 }
                 self.outdent();
                 r
@@ -138,23 +140,29 @@ impl AstTreePrinter {
                 r.push_str(&self.print_expression(object));
                 self.outdent();
 
-                r.push_str(&self.p("Property:"));
-                self.indent();
-                r.push_str(&self.print_expression(property));
-                self.outdent();
+                r.push_str(&self.p(&format!("Property: '{}'", property)));
 
                 self.outdent();
             }
             Expression::Call { callee, args } => {
-                r.push_str(&self.p(&format!("Call (callee: '{}')", callee)));
+                r.push_str(&self.p("Call"));
                 self.indent();
 
+                r.push_str(&self.p("Callee:"));
+                self.indent();
+                r.push_str(&self.print_expression(callee));
+                self.outdent();
+                
                 if !args.is_empty() {
+                    r.push_str(&self.p("Arguments:"));
+                    self.indent();
                     for arg in args {
                         r.push_str(&self.print_expression(arg));
                     }
+                    self.outdent();
+                } else {
+                    r.push_str(&self.p("Arguments: None"));
                 }
-
                 self.outdent();
             }
             Expression::Object(fields) => {

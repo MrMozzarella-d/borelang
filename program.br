@@ -1,4 +1,6 @@
 fn main() {
     let i: int = 0
     mut j: int = 0
+    let x: bool = false
+    x.y.z.l()
 }

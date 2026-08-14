@@ -1,4 +1,4 @@
-use crate::token::{Token, TokenData};
+use crate::token::{Token};
 
 #[derive(Debug)]
 pub enum Expression<'a> {
@@ -16,12 +16,12 @@ pub enum Expression<'a> {
     },
     PropertyAccess {
         object: Box<Expression<'a>>,
-        property: Box<Expression<'a>>,
+        property: &'a str,
     },
     Call {
-        callee: &'a str, // todo: change this to a expression
-        args: Vec<Expression<'a>>,
-    }
+        callee: Box<Expression<'a>>,
+        args: Vec<Expression<'a>>, // 14/08/26: norrr im too lazzzzyyy...... im sooo gassssyyyyyy im farting all over the place eeee e oe ke kweaop w2424pou094ßu 39042uqß4nigrrdgngg
+    }                              // also 14/08/26: i am not lazy anymore.                             pet me.
 }
 #[derive(Debug)]
 pub enum Statement<'a> {
@@ -53,11 +53,13 @@ pub enum Statement<'a> {
 pub enum Type {
     Str,
     Int,
+    Bool,
 }
 pub fn get_type(name: &str) -> Option<Type> {
     match name {
-        "str" => Some(Type::Str),
-        "int" => Some(Type::Int),
-        _ => None,
+        "str"  => Some(Type::Str),
+        "int"  => Some(Type::Int),
+        "bool" => Some(Type::Bool),
+        _      => None,
     }
 }

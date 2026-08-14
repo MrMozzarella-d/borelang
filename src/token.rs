@@ -86,6 +86,7 @@ impl<'a> Token<'a> {
             | TokenData::IntegerLiteral(_)
             | TokenData::FloatLiteral(_)
             | TokenData::StringLiteral(_)
+            | TokenData::BooleanLiteral(_)
         )
     }
 }
@@ -100,5 +101,10 @@ pub static OPERATORS: phf::Map<&'static str, TokenData> = phf_map! {
     "*" => TokenData::Mul,
     "*=" => TokenData::MulAssign,
     "=" => TokenData::Equal,
+    "!=" => TokenData::NotEqual,
     "==" => TokenData::Equivalent,
+    "<" => TokenData::LessThan,
+    "<=" => TokenData::LessThanEqual,
+    ">" => TokenData::GreaterThan,
+    ">=" => TokenData::GreaterThanEqual,
 };
