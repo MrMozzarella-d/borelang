@@ -21,7 +21,7 @@ pub enum Expression<'a> {
     Call {
         callee: Box<Expression<'a>>,
         args: Vec<Expression<'a>>, // 14/08/26: norrr im too lazzzzyyy...... im sooo gassssyyyyyy im farting all over the place eeee e oe ke kweaop w2424pou094ßu 39042uqß4nigrrdgngg
-    }                              // also 14/08/26: i am not lazy anymore.                             pet me.
+    },                            // also 14/08/26: i am not lazy anymore.                             pet me.
 }
 #[derive(Debug)]
 pub enum Statement<'a> {
@@ -44,6 +44,12 @@ pub enum Statement<'a> {
         name: &'a str,
         ty: Option<Type>,
         value: Option<Expression<'a>>,
+    },
+    ForLoop {
+        var_decl: Box<Statement<'a>>,
+        start: Expression<'a>,
+        end: Expression<'a>,
+        body: Vec<Statement<'a>>,
     },
     Return(Option<Expression<'a>>),
     Expression(Expression<'a>),

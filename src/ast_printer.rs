@@ -1,3 +1,4 @@
+use std::env::var;
 use crate::node::{Statement, Expression};
 
 pub struct AstTreePrinter {
@@ -112,6 +113,36 @@ impl AstTreePrinter {
                 self.outdent();
                 r
             }
+            Statement::ForLoop { var_decl, start, end, body } => {
+                let mut r = self.p("ForLoopStatement");
+                self.indent();
+
+                r.push_str(&self.p("Initializer:"));
+                self.indent();
+                r.push_str(&self.print_statement(var_decl));
+                self.outdent();
+
+                r.push_str(&self.p("Range Start:"));
+                self.indent();
+                r.push_str(&self.print_expression(start));
+                self.outdent();
+
+                r.push_str(&self.p("Range End:"));
+                self.indent();
+                r.push_str(&self.print_expression(end));
+                self.outdent();
+
+                r.push_str(&self.p("Body:"));
+                self.indent();
+                for inner_stmt in body {
+                    r.push_str(&self.print_statement(inner_stmt));
+                }
+                self.outdent();
+
+                self.outdent();
+                r
+            }
+
         }
     }
 
@@ -152,7 +183,7 @@ impl AstTreePrinter {
                 self.indent();
                 r.push_str(&self.print_expression(callee));
                 self.outdent();
-                
+
                 if !args.is_empty() {
                     r.push_str(&self.p("Arguments:"));
                     self.indent();

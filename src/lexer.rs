@@ -143,6 +143,16 @@ impl<'a> Lexer<'a> {
                         token_vec.push(Token::new(TokenData::Semicolon, self.line, self.column))
                     }
                 },
+                '&' => {
+                    if self.advance() == '&' {
+                        token_vec.push(Token::new(TokenData::And, self.line, self.column))
+                    }
+                },
+                '?' => {
+                    if self.advance() == '?' {
+                        token_vec.push(Token::new(TokenData::Or, self.line, self.column))
+                    }
+                }
                 ':' => token_vec.push(Token::new(TokenData::Colon, self.line, self.column)),
                 '{' => token_vec.push(Token::new(TokenData::OpenBody, self.line, self.column, )),
                 '}' => token_vec.push(Token::new(TokenData::CloseBody, self.line, self.column, )),
@@ -151,7 +161,13 @@ impl<'a> Lexer<'a> {
                 '(' => token_vec.push(Token::new(TokenData::OpenParen, self.line, self.column, )),
                 ')' => token_vec.push(Token::new(TokenData::CloseParen, self.line, self.column, )),
                 ',' => token_vec.push(Token::new(TokenData::Comma, self.line, self.column, )),
-                '.' => token_vec.push(Token::new(TokenData::Dot, self.line, self.column, )),
+                '.' => {
+                    if self.advance() == '.' {
+                        token_vec.push(Token::new(TokenData::Range, self.line, self.column))
+                    } else {
+                        token_vec.push(Token::new(TokenData::Dot, self.line, self.column)) 
+                    }
+                },
                 '#' => {
                     while self.current < self.source.len() {
                         if self.peek() == '\n' {

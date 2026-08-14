@@ -108,10 +108,13 @@ impl<'a> Parser<'a> {
                         self.parse_function()
                     },
                     "let" => {
-                        self.parse_var(false)
+                        self.parse_var(false, true)
                     },
                     "mut" => {
-                        self.parse_var(true)
+                        self.parse_var(true, true)
+                    },
+                    "for" => {
+                        self.parse_for()
                     },
                     _ => {
                         Some(Statement::Expression(self.parse_expression(0)?))
@@ -148,7 +151,7 @@ impl<'a> Parser<'a> {
         while let Some(token) = self.peek().map(|t| t) {
             let next = token.token_data;
             match next {
-                TokenData::Dot => { 
+                TokenData::Dot => {
                     let op_importance = self.get_importance(next);
                     if op_importance <= min_importance {
                         break;
@@ -200,7 +203,7 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
-            
+
         };
         Some(left_expr)
     }
@@ -255,8 +258,10 @@ impl<'a> Parser<'a> {
         Some(stmt)
     }
 
-    fn parse_var(&mut self, mutable: bool) -> Option<Statement<'a>> {
-        self.advance(); // consume let/mut
+    fn parse_var(&mut self, mutable: bool, consume: bool) -> Option<Statement<'a>> {
+        if consume {
+            self.advance(); // consume let/mut
+        }
         let name = self.expect_literal().unwrap();
         let mut ty: Option<Type> = None;
         println!("  var {}", name);
@@ -284,5 +289,36 @@ impl<'a> Parser<'a> {
             };
             Some(stmt)
         }
+    }
+
+    fn parse_for(&mut self) -> Option<Statement<'a>> {
+        self.advance(); // consume for
+        let var_str = self.expect_literal().unwrap();
+        if var_str != "let" && var_str != "mut" { return None }
+        let var_decl = self.parse_var(var_str == "mut", false)?; // here its false because we already consumed it
+        let in_str = self.expect_literal().unwrap();
+        if in_str != "in" { return None }
+        let start = self.parse_expression(0)?;
+        self.expect(TokenData::Range);
+        let end = self.parse_expression(0)?;
+        self.expect(TokenData::OpenBody);
+        let mut body = Vec::new();
+        while self.current < self.tokens.len() {
+            if self.peek()?.token_data == TokenData::CloseBody {
+                break;
+            }
+            if let Some(stmt) = self.parse_statement() {
+                body.push(stmt);
+            } else {
+                self.advance();
+            }
+        };
+        let stmt = Statement::ForLoop {
+            var_decl: Box::new(var_decl),
+            start,
+            end,
+            body,
+        };
+        Some(stmt)
     }
 }

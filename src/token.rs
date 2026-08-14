@@ -32,6 +32,10 @@ pub enum TokenData<'a> {
     GreaterThan,
     // >=
     GreaterThanEqual,
+    // ??
+    Or,
+    // &&
+    And,
     // {
     OpenBody,
     // }
@@ -54,6 +58,8 @@ pub enum TokenData<'a> {
     Colon,
     // .
     Dot,
+    // ..
+    Range,
     // true or false
     BooleanLiteral(bool),
     // "<string>"
