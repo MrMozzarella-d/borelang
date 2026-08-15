@@ -108,10 +108,10 @@ impl<'a> Parser<'a> {
                         self.parse_function()
                     },
                     "let" => {
-                        self.parse_var(false, true)
+                        self.parse_var(false)
                     },
                     "mut" => {
-                        self.parse_var(true, true)
+                        self.parse_var(true)
                     },
                     "for" => {
                         self.parse_for()
@@ -258,10 +258,8 @@ impl<'a> Parser<'a> {
         Some(stmt)
     }
 
-    fn parse_var(&mut self, mutable: bool, consume: bool) -> Option<Statement<'a>> {
-        if consume {
-            self.advance(); // consume let/mut
-        }
+    fn parse_var(&mut self, mutable: bool) -> Option<Statement<'a>> {
+        self.advance(); // consume let/mut
         let name = self.expect_literal().unwrap();
         let mut ty: Option<Type> = None;
         println!("  var {}", name);
@@ -293,9 +291,17 @@ impl<'a> Parser<'a> {
 
     fn parse_for(&mut self) -> Option<Statement<'a>> {
         self.advance(); // consume for
-        let var_str = self.expect_literal().unwrap();
-        if var_str != "let" && var_str != "mut" { return None }
-        let var_decl = self.parse_var(var_str == "mut", false)?; // here its false because we already consumed it
+        let var_data = self.peek()?.token_data;
+        let var_str: &'a str;
+        match var_data { 
+            TokenData::Literal(v) => {
+                if v != "let" && v != "mut" { return None }
+                var_str = v;
+            },
+            _ => return None,
+        }
+        let var_decl = self.parse_var(var_str == "mut")?;
+
         let in_str = self.expect_literal().unwrap();
         if in_str != "in" { return None }
         let start = self.parse_expression(0)?;
