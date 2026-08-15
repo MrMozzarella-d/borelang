@@ -1,19 +1,21 @@
-stone base: int = 42
+let base: int = 42
 
-fn main() {
-    println("hi")
-    mut score = base * 2
-    let letted_score = score
-    score *= 42
-    if score == 4200 {
-        println("Oh wow, that is very interesting")
-    } else {
-        println("oh no...")
-    }
+println("hi")
+mut score = base * 2
+let letted_score = score
+score = calculate_stuff(score).final
+if score == 4200 {
+    println("Oh wow, that is very interesting")
+} else {
+    println("oh no...")
+}
 
-    for i in 0..score {
-        println("{}", i)
-        print("wow ")
-        println("{} is great", letted_score * i)
-    }
+for i in 0..score {
+    println("{}", i)
+    print("wow ")
+    println("{} is great", letted_score * i)
+}
+
+fn calculate_stuff(score: int) {
+    ;;score * 42
 }

@@ -165,7 +165,7 @@ impl<'a> Lexer<'a> {
                     if self.advance() == '.' {
                         token_vec.push(Token::new(TokenData::Range, self.line, self.column))
                     } else {
-                        token_vec.push(Token::new(TokenData::Dot, self.line, self.column)) 
+                        token_vec.push(Token::new(TokenData::Dot, self.line, self.column))
                     }
                 },
                 '#' => {
