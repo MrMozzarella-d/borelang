@@ -1,17 +1,19 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::error::{RuntimeError, RuntimeErrorType, SyntaxError, SyntaxErrorType};
+use log::__private_api::Value;
+use crate::error::{RuntimeError, RuntimeErrorType};
 use crate::node::{get_expr_type, Statement, StatementType, Type, ExpressionType, Expression};
 use crate::token::TokenData;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum RuntimeValue {
     Str(String),
     Int(i64),
     Float(f64),
     Bool(bool),
     Map(HashMap<String, RuntimeValue>),
-    RustFunction(fn(Vec<RuntimeValue>) -> RuntimeValue),
+    RustFunction(fn(Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeErrorType>),
     BoreFunction(Rc<Statement>),
     Null,
 }
@@ -21,20 +23,49 @@ pub struct Variable {
     value: RuntimeValue,
 }
 pub struct Interpreter {
+    env: Environment,
     ast: Vec<Statement>,
 }
-impl RuntimeValue {
-    pub fn from(value: &ExpressionType) -> Option<Self> {
-        match value {
-            ExpressionType::Boolean(b) => Some(RuntimeValue::Bool(*b)),
-            ExpressionType::Integer(i) => Some(RuntimeValue::Int(*i)),
-            ExpressionType::Float(f) => Some(RuntimeValue::Float(*f)),
-            ExpressionType::String(s) => Some(RuntimeValue::Str(s.to_string())),
-            _ => None,
+// impl RuntimeValue {
+//     pub fn from(value: &ExpressionType) -> Option<Self> {
+//         match value {
+//             ExpressionType::Boolean(b) => Some(RuntimeValue::Bool(*b)),
+//             ExpressionType::Integer(i) => Some(RuntimeValue::Int(*i)),
+//             ExpressionType::Float(f) => Some(RuntimeValue::Float(*f)),
+//             ExpressionType::String(s) => Some(RuntimeValue::Str(s.to_string())),
+//             _ => None,
+//         }
+//     }
+// }
+#[derive(Clone)]
+pub struct Environment {
+    values: HashMap<String, RuntimeValue>,
+    enclosing: Option<Rc<RefCell<Environment>>>
+}
+impl Environment {
+    pub fn new(enclosing: Option<Rc<RefCell<Environment>>>) -> Self {
+        Self {
+            values: HashMap::new(),
+            enclosing,
         }
     }
+    pub fn define(&mut self, name: String, value: RuntimeValue) -> Result<&mut Environment, RuntimeErrorType> {
+        if self.values.contains_key(&name) {
+            return Err(RuntimeErrorType::VariableAlreadySet(name));
+        }
+        self.values.insert(name, value);
+        Ok(self)
+    }
+    pub fn get(&self, name: String) -> Result<RuntimeValue, RuntimeErrorType> {
+        if let Some(value) = self.values.get(&name) {
+            return Ok(value.clone());
+        }
+        if self.enclosing.is_some() {
+            return self.enclosing.as_ref().unwrap().borrow().get(name);
+        }
+        Err(RuntimeErrorType::VariableNotFound(name))
+    }
 }
-
 impl Interpreter {
     pub fn new(ast: Vec<Statement>) -> Self {
         Self {
@@ -192,12 +223,12 @@ impl Interpreter {
             //         })
             //     }
             // }
-            ExpressionType::PropertyAccess {object, property} => {
+            ExpressionType::PropertyAccess {ref object, ref property} => {
                 let left = self.evaluate_expression(&object, scope)?;
                 match left {
                     RuntimeValue::Map(ref map) => {
-                        if let Some(v) = map.get(&property) {
-                            Ok(*v)
+                        if let Some(v) = map.get(property) {
+                            Ok(v.to_owned())
                         } else {
                             Err(RuntimeError {
                                 error_type: RuntimeErrorType::PropertyNotFound(),
@@ -212,12 +243,52 @@ impl Interpreter {
                         column: object.column,
                     })
                 }
-            }
+            },
+            ExpressionType::Call {ref callee, ref args} => {
+                let callee_v = self.evaluate_expression(callee, scope)?;
+                let mut arg_v = Vec::new();
+                for arg in args {
+                    let v = self.evaluate_expression(arg, scope)?;
+                    arg_v.push(v);
+                }
+                match callee_v {
+                    RuntimeValue::BoreFunction(func) => {
+                        let v = self.run_function(func, arg_v);
+                        v
+                    },
+                    RuntimeValue::RustFunction(func) => {
+                        let v = func(arg_v);
+                        if v.is_err() {
+                            return Err(RuntimeError {
+                                error_type: v.unwrap_err(),
+                                line: callee.line,
+                                column: callee.column,
+                            });
+                        };
+                        v.map_err(|typ| RuntimeError { error_type: typ, line: callee.line, column: callee.column })
+                    },
+                    _ => Err(RuntimeError {
+                        error_type: RuntimeErrorType::FailedEvaluatingExpression(),
+                        line: callee.line,
+                        column: callee.column,
+                    })
+                }
+            },
             _ => Err(RuntimeError{
                 error_type: RuntimeErrorType::FailedEvaluatingExpression(),
                 line: expression.line,
                 column: expression.column,
             })
+        }
+    }
+
+    pub fn run_function(&self, fn_stmt: Rc<Statement>, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        match fn_stmt.statement_type {
+            StatementType::FunctionDeclaration {ref name, ref params, ref body} => {
+                for stmt in body {
+                    self.run_statement(stmt, )
+                }
+            }
         }
     }
 }

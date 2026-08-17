@@ -47,7 +47,7 @@ impl Display for SyntaxError {
         }
     }
 }
-
+#[derive(Debug)]
 pub enum RuntimeErrorType {
     VariableNotFound(String),
     VariableAlreadySet(String),
@@ -61,6 +61,7 @@ pub enum RuntimeErrorType {
     PropertyAccessOnTypeNotMap(),
     PropertyNotFound(),
 }
+#[derive(Debug)]
 pub struct RuntimeError {
     pub error_type: RuntimeErrorType,
     pub line: usize,

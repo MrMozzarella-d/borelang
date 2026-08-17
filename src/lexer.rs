@@ -162,7 +162,7 @@ impl<'a> Lexer<'a> {
                 ')' => token_vec.push(Token::new(TokenData::CloseParen, self.line, self.column, )),
                 ',' => token_vec.push(Token::new(TokenData::Comma, self.line, self.column, )),
                 '.' => {
-                    if self.advance() == '.' {
+                    if self.peek() == '.' {
                         token_vec.push(Token::new(TokenData::Range, self.line, self.column))
                     } else {
                         token_vec.push(Token::new(TokenData::Dot, self.line, self.column))

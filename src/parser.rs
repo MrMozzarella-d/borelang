@@ -188,6 +188,11 @@ impl Parser {
                     column: left.column,
                 }
             },
+            TokenData::OpenParen => {
+                let inner = self.parse_expression(0)?;  
+                self.expect(TokenData::CloseParen)?;
+                inner
+            },
             _ => {
                 return Err(SyntaxError{
                     error_type: SyntaxErrorType::ExpectedAtomic(left.token_data.clone()),
@@ -204,7 +209,7 @@ impl Parser {
                     if op_importance <= min_importance {
                         break;
                     }
-                    let d =self.advance(); // consume dot
+                    let d =self.expect(TokenData::Dot)?; // consume dot
                     let line = d.line;
                     let column = d.column;
                     let property = self.expect_literal()?;

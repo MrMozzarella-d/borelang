@@ -2,7 +2,7 @@ extern crate core;
 
 use std::fs::OpenOptions;
 use std::io::{Read};
-
+use crate::ast_printer::AstTreePrinter;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 
@@ -28,20 +28,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     file.read_to_string(&mut content)?;
     let mut lexer = Lexer::new(&*content);
     let tokens = lexer.tokenize();
-    // for token in tokens.iter() {
-    //     println!("      {:?}", token);
-    // }
+    for token in tokens.iter() {
+        println!("      {:?}", token);
+    }
     let mut parser = Parser::new(tokens);
     let statements_res = parser.parse();
     if statements_res.is_err() {
         eprintln!("{}", statements_res.unwrap_err());
     } else {
-        let map = statements_res.map(|v| v).unwrap();
-        let interpreter = interpreter::Interpreter::new(map);
-        if let Err(e) = interpreter.run() {
-            eprintln!("{}", e);
-        }
+        let mut ast_printer = AstTreePrinter::new();
+        ast_printer.print_program(&*statements_res.unwrap());
+        
+        // let map = statements_res.map(|v| v).unwrap();
+        // let interpreter = interpreter::Interpreter::new(map);
+        // if let Err(e) = interpreter.run() {
+        //     eprintln!("{}", e);
+        // }
     }
+    
     let time_now = std::time::SystemTime::now();
     let dur = time_now.duration_since(time)?.as_nanos();
     println!("took: {}", dur);
