@@ -1,20 +1,20 @@
-use crate::node::{get_type, Expression, Statement, Type, StatementType};
+use std::cmp::PartialEq;
+use crate::node::{get_type, Expression, Statement, Type, StatementType, ExpressionType, get_expr_type};
 use crate::token::{Token, TokenData};
 use crate::error::{SyntaxError, SyntaxErrorType};
 
-pub struct Parser<'a> {
-    tokens: Vec<Token<'a>>,
+pub struct Parser {
+    tokens: Vec<Token>,
     current: usize,
 }
-
-impl<'a> Parser<'a> {
-    pub fn new(tokens: Vec<Token<'a>>) -> Self {
+impl Parser {
+    pub fn new(tokens: Vec<Token>) -> Self {
         Self {
             tokens,
             current: 0
         }
     }
-    fn advance(&mut self) -> &Token<'a> {
+    fn advance(&mut self) -> &Token {
         if let Some(t) = self.tokens.get(self.current) {
             self.current += 1;
             t
@@ -22,12 +22,11 @@ impl<'a> Parser<'a> {
             &self.tokens[self.tokens.len() - 1] // return eof
         }
     }
-    fn expect<'b>(&'b mut self, expected_type: TokenData<'b>) -> Result<&Token<'a>, SyntaxError> {
+    fn expect(&mut self, expected_type: TokenData) -> Result<&Token, SyntaxError> {
         let token = self.advance();
-        let ty = token.token_data;
-        if ty != expected_type {
+        if token.token_data != expected_type {
             return Err(SyntaxError{
-                error_type: SyntaxErrorType::Expected(expected_type, ty),
+                error_type: SyntaxErrorType::Expected(expected_type, token.token_data.clone()),
                 line: token.line,
                 column: token.column,
             })
@@ -53,19 +52,19 @@ impl<'a> Parser<'a> {
     //         None
     //     }
     // }
-    fn expect_literal(&mut self) -> Result<&'a str, SyntaxError> {
+    fn expect_literal(&mut self) -> Result<String, SyntaxError> {
         let adv = self.advance();
         match adv {
-            Token { token_data: TokenData::Literal(value), .. } => Ok(value),
+            Token { token_data: TokenData::Literal(value), .. } => Ok(value.to_owned()),
             _ => Err(SyntaxError{
-                error_type: SyntaxErrorType::Expected(TokenData::Literal(""), adv.token_data),
+                error_type: SyntaxErrorType::Expected(TokenData::Literal("".to_string()), adv.token_data.clone()),
                 line: adv.line,
                 column: adv.column,
             }),
         }
 
     }
-    fn peek(&self) -> Result<&Token<'a>, SyntaxError> {
+    fn peek(&self) -> Result<&Token, SyntaxError> {
         if let Some(tk) = self.tokens.get(self.current) {
             // if tk.token_data == TokenData::EOF {
             //     return Err(SyntaxError{
@@ -83,8 +82,8 @@ impl<'a> Parser<'a> {
             })
         }
     }
-    pub(crate) fn parse(&mut self) -> Result<Vec<Statement<'a>>, SyntaxError> {
-        let mut statement_vec: Vec<Statement<'a>> = Vec::new();
+    pub(crate) fn parse(&mut self) -> Result<Vec<Statement>, SyntaxError> {
+        let mut statement_vec: Vec<Statement> = Vec::new();
         while self.current < self.tokens.len() {
             if let Ok(token) = self.peek() {
                 if token.token_data == TokenData::EOF {
@@ -103,13 +102,14 @@ impl<'a> Parser<'a> {
         }
         Ok(statement_vec)
     }
-    fn parse_statement(&mut self) -> Result<Statement<'a>, SyntaxError> {
+    fn parse_statement(&mut self) -> Result<Statement, SyntaxError> {
         if let Ok(tk) = self.peek() {
             let line = tk.line;
             let column = tk.column;
+            let tk = tk.clone();
             match tk.token_data {
                 TokenData::Literal(name) => {
-                    match name {
+                    match name.as_str() {
                         "fn" => self.parse_function(),
                         "let" => self.parse_var(false),
                         "mut" => self.parse_var(true),
@@ -126,7 +126,7 @@ impl<'a> Parser<'a> {
                 TokenData::Return => { self.parse_return() },
                 _ => {
                     Err(SyntaxError{
-                        error_type: SyntaxErrorType::Expected(TokenData::Literal(""), tk.token_data),
+                        error_type: SyntaxErrorType::Expected(TokenData::Literal("".to_string()), tk.token_data),
                         line,
                         column,
                     })
@@ -150,35 +150,71 @@ impl<'a> Parser<'a> {
             _ => 0,
         }
     }
-    fn parse_expression(&mut self, min_importance: usize) -> Result<Expression<'a>, SyntaxError> {
+    fn parse_expression(&mut self, min_importance: usize) -> Result<Expression, SyntaxError> {
         let left = self.advance();
-        let mut left_expr = match left.token_data {
-            TokenData::IntegerLiteral(v) => Expression::Integer(v),
-            TokenData::FloatLiteral(v) => Expression::Float(v),
-            TokenData::StringLiteral(v) => Expression::String(v),
-            TokenData::Literal(v) => Expression::Identifier(v),
-            TokenData::BooleanLiteral(v) => Expression::Boolean(v),
+        let mut left_expr = match left.clone().token_data {
+            TokenData::IntegerLiteral(v) => {
+                Expression{
+                    expression_type: ExpressionType::Integer(v),
+                    line: left.line,
+                    column: left.column,
+                }
+            },
+            TokenData::FloatLiteral(v) => {
+                Expression{
+                    expression_type: ExpressionType::Float(v),
+                    line: left.line,
+                    column: left.column,
+                }
+            },
+            TokenData::StringLiteral(v) => {
+                Expression{
+                    expression_type: ExpressionType::String(v),
+                    line: left.line,
+                    column: left.column,
+                }
+            },
+            TokenData::Literal(v) => {
+                Expression{
+                    expression_type: ExpressionType::Identifier(v),
+                    line: left.line,
+                    column: left.column,
+                }
+            },
+            TokenData::BooleanLiteral(v) => {
+                Expression{
+                    expression_type: ExpressionType::Boolean(v),
+                    line: left.line,
+                    column: left.column,
+                }
+            },
             _ => {
                 return Err(SyntaxError{
-                    error_type: SyntaxErrorType::ExpectedAtomic(left.token_data),
+                    error_type: SyntaxErrorType::ExpectedAtomic(left.token_data.clone()),
                     line: left.line,
                     column: left.column,
                 });
             }
         };
         while let Ok(token) = self.peek().map(|t| t) {
-            let next = token.token_data;
+            let next = token.token_data.clone();
             match next {
                 TokenData::Dot => {
                     let op_importance = self.get_importance(next);
                     if op_importance <= min_importance {
                         break;
                     }
-                    self.advance(); // consume dot
+                    let d =self.advance(); // consume dot
+                    let line = d.line;
+                    let column = d.column;
                     let property = self.expect_literal()?;
-                    let expr = Expression::PropertyAccess {
-                        object: Box::new(left_expr),
-                        property,
+                    let expr = Expression{
+                        expression_type: ExpressionType::PropertyAccess {
+                                            object: Box::new(left_expr),
+                                            property,
+                                        },
+                        line,
+                        column,
                     };
                     left_expr = expr;
                 },
@@ -201,9 +237,15 @@ impl<'a> Parser<'a> {
                         }
                     }
                     self.expect(TokenData::CloseParen)?;
-                    let expr = Expression::Call {
-                        callee: Box::new(left_expr),
-                        args: expr_vec,
+                    let line = left_expr.line;
+                    let column = left_expr.column;
+                    let expr = Expression{
+                                    expression_type: ExpressionType::Call {
+                                        callee: Box::new(left_expr),
+                                        args: expr_vec,
+                                    },
+                        line,
+                        column,
                     };
                     left_expr = expr;
                 },
@@ -212,12 +254,18 @@ impl<'a> Parser<'a> {
                     if op_importance <= min_importance {
                         break;
                     }
-                    let op = *self.advance();
+                    let op = self.advance().clone();
+                    let line = op.line;
+                    let column = op.column;
                     let right_expr = self.parse_expression(op_importance)?;
-                    left_expr = Expression::BinaryOp {
-                        left: Box::new(left_expr),
-                        op,
-                        right: Box::new(right_expr),
+                    left_expr = Expression{
+                        expression_type: ExpressionType::BinaryOp {
+                                            left: Box::new(left_expr),
+                                            op: op.clone(),
+                                            right: Box::new(right_expr),
+                                        },
+                        line,
+                        column,
                     }
                 }
             }
@@ -226,7 +274,7 @@ impl<'a> Parser<'a> {
         Ok(left_expr)
     }
 
-    fn parse_function(&mut self) -> Result<Statement<'a>, SyntaxError> {
+    fn parse_function(&mut self) -> Result<Statement, SyntaxError> {
         let start = self.advance(); // consume proc, to name
         let line = start.line;
         let column = start.column;
@@ -245,7 +293,7 @@ impl<'a> Parser<'a> {
         }
         self.expect(TokenData::CloseParen)?;
         self.expect(TokenData::OpenBody)?;
-        let mut body: Vec<Statement<'a>> = Vec::new();
+        let mut body: Vec<Statement> = Vec::new();
         while self.current < self.tokens.len() {
             if self.peek()?.token_data == TokenData::CloseBody {
                 break;
@@ -270,7 +318,7 @@ impl<'a> Parser<'a> {
         })
     }
     
-    fn parse_return(&mut self) -> Result<Statement<'a>, SyntaxError> {
+    fn parse_return(&mut self) -> Result<Statement, SyntaxError> {
         let kw = self.advance(); // consume return kw
         let line = kw.line;
         let column = kw.column;
@@ -291,7 +339,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_var(&mut self, mutable: bool) -> Result<Statement<'a>, SyntaxError> {
+    fn parse_var(&mut self, mutable: bool) -> Result<Statement, SyntaxError> {
         let start = self.advance(); // consume let/mut
         let line = start.line;
         let column = start.column;
@@ -300,11 +348,36 @@ impl<'a> Parser<'a> {
         if self.peek().map(|t| t.token_data == TokenData::Colon)? { // vars can either have a set type or not
             self.expect(TokenData::Colon)?; // consume colon
             let literal = self.expect_literal()?;
-            ty = get_type(literal);
+            ty = get_type(&literal);
+            if ty.is_none() {
+                return Err(SyntaxError {
+                    error_type: SyntaxErrorType::ExpectedLiteral("type".to_string(), literal),
+                    line,
+                    column,
+                })
+            }
         }
         if self.peek().map(|t| t.token_data == TokenData::Equal)? {
             self.expect(TokenData::Equal)?; // consume equal
             let expr = self.parse_expression(0)?;
+            if let Some(expected_ty) = ty {
+                let inferred_ty = get_expr_type(&expr);
+                if inferred_ty.is_none() {
+                    return Err(SyntaxError{
+                        error_type: SyntaxErrorType::TypeInferenceFailed(),
+                        line: expr.line,
+                        column: expr.column,
+                    })
+                }
+                let inferred = inferred_ty.unwrap();
+                if expected_ty != inferred {
+                    return Err(SyntaxError {
+                        error_type: SyntaxErrorType::TypeError(inferred, expected_ty),
+                        line,
+                        column,
+                    })
+                }
+            }
             let stmt = StatementType::VariableDeclaration {
                 name,
                 ty,
@@ -338,14 +411,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_for(&mut self) -> Result<Statement<'a>, SyntaxError> {
+    fn parse_for(&mut self) -> Result<Statement, SyntaxError> {
         let f = self.advance(); // consume for
         let line = f.line;
         let column = f.column;
-        let var_str = match &self.tokens[self.current].token_data {
-            TokenData::Literal(s) => s.to_string(),
+        let var_str = match self.peek()?.token_data {
+            TokenData::Literal(ref s) => s.to_string(),
             _ => return Err(SyntaxError{
-                error_type: SyntaxErrorType::Expected(TokenData::Literal(""), self.peek()?.token_data),
+                error_type: SyntaxErrorType::Expected(TokenData::Literal("".to_string()), self.peek()?.token_data.clone()),
                 line: self.peek()?.line,
                 column: self.peek()?.column,
             })
@@ -380,11 +453,44 @@ impl<'a> Parser<'a> {
                 self.advance();
             }
         };
+        self.expect(TokenData::CloseBody)?;
         let stmt = StatementType::ForLoop {
             var_decl,
             start,
             end,
             body,
+        };
+        Ok(Statement {
+            statement_type: stmt,
+            line,
+            column,
+        })
+    }
+
+    fn parse_import(&mut self) -> Result<Statement, SyntaxError> {
+        let i = self.advance(); // consume import
+        let line = i.line;
+        let column = i.column;
+        let mut mods = Vec::new();
+        'parent: while self.current < self.tokens.len() {
+            match self.peek()?.token_data {
+                TokenData::Comma => {
+                    self.expect(TokenData::Comma)?;
+                    let i = self.expect_literal()?;
+                    if i.as_str() == "import" {
+                        return Err(SyntaxError {
+                            error_type: SyntaxErrorType::ExpectedLiteral("module name".to_string(), i),
+                            line,
+                            column,
+                        })
+                    }
+                    mods.push(i);
+                }
+                _ => break 'parent,
+            }
+        };
+        let stmt = StatementType::Import {
+            mods,
         };
         Ok(Statement {
             statement_type: stmt,

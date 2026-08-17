@@ -39,7 +39,7 @@ impl<'a> Lexer<'a> {
     }
     fn is_at_end(&self) -> bool { self.current >= self.source.len() }
 
-    pub fn tokenize(&mut self) -> Vec<Token<'_>> {
+    pub fn tokenize(&mut self) -> Vec<Token> {
         let mut token_vec: Vec<Token> = Vec::new();
         while self.current < self.source.len() {
             let start_pos = self.current;
@@ -64,7 +64,7 @@ impl<'a> Lexer<'a> {
                     continue
                 }
                 token_vec.push(Token::new(
-                    TokenData::Literal(identifier),
+                    TokenData::Literal(identifier.to_string()),
                     self.line,
                     self.column,
                 ));
@@ -131,7 +131,7 @@ impl<'a> Lexer<'a> {
                     let text = &self.source[start_pos..end_pos];
                     self.advance(); // consume other "
                     token_vec.push(Token::new(
-                        TokenData::StringLiteral(text),
+                        TokenData::StringLiteral(text.to_string()),
                         self.line,
                         self.column,
                     ));

@@ -1,7 +1,7 @@
-use phf::phf_map;
+use phf::phf_map; // it says theres an error here (theres not)
 
-#[derive(Debug, Clone, PartialEq, Copy)]
-pub enum TokenData<'a> {
+#[derive(Debug, Clone, PartialEq)]
+pub enum TokenData {
     // =
     Equal,
     // ==
@@ -63,7 +63,7 @@ pub enum TokenData<'a> {
     // true or false
     BooleanLiteral(bool),
     // "<string>"
-    StringLiteral(&'a str),
+    StringLiteral(String),
     // '<char>'
     CharacterLiteral(char),
     // <0-9>..
@@ -71,19 +71,19 @@ pub enum TokenData<'a> {
     // <0.00-9.99>..
     FloatLiteral(f64),
     // any word
-    Literal(&'a str),
+    Literal(String),
     // nothing
     EOF,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct Token<'a> {
-    pub(crate) token_data: TokenData<'a>,
+#[derive(Debug, Clone)]
+pub struct Token {
+    pub(crate) token_data: TokenData,
     pub(crate) line: usize,
     pub(crate) column: usize,
 }
-impl<'a> Token<'a> {
-    pub fn new(token_data: TokenData<'a>, line: usize, column: usize) -> Self { // we dont need value anymore
+impl<'a> Token {
+    pub fn new(token_data: TokenData, line: usize, column: usize) -> Self { // we dont need value anymore
         Self { token_data, line, column, }
     }
     pub(crate) fn is_atomic(&self) -> bool {

@@ -1,6 +1,6 @@
-let x: str = "Hello, world!"
-println("{}", x)
+import stdlib
 
-fn mommy() {
-    Hi
+println("Hello, world!")
+for let i: int in 0..100 {
+    println("hi, {}", i)
 }

@@ -1,5 +1,7 @@
+extern crate core;
+
 use std::fs::OpenOptions;
-use std::io::{Error, Read};
+use std::io::{Read};
 
 use crate::lexer::Lexer;
 use crate::parser::Parser;
@@ -11,9 +13,12 @@ mod node;
 mod ast_printer;
 mod error;
 mod interpreter;
+mod stdlib;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     //println!("hello!");
+    let time = std::time::SystemTime::now();
+
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -37,5 +42,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("{}", e);
         }
     }
+    let time_now = std::time::SystemTime::now();
+    let dur = time_now.duration_since(time)?.as_nanos();
+    println!("took: {}", dur);
+
     Ok(())
 }
