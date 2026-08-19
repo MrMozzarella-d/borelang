@@ -1,6 +1,5 @@
-use std::fmt::{write, Display, Formatter};
-use crate::interpreter::RuntimeValue;
-use crate::node::Type;
+use std::fmt::{Display, Formatter};
+use crate::interpreter::{Value};
 use crate::token::TokenData;
 
 #[derive(Debug)]
@@ -11,7 +10,6 @@ pub enum SyntaxErrorType {
     Unexpected(TokenData),
     NullVariableWithoutType(String),
     TypeInferenceFailed(),
-    TypeError(Type, Type),
 }
 #[derive(Debug)]
 pub struct SyntaxError {
@@ -41,9 +39,9 @@ impl Display for SyntaxError {
             SyntaxErrorType::TypeInferenceFailed() => {
                 write!(f, "Syntax Error: Type Inference Failed at {}:{}", self.line, self.column)
             }
-            SyntaxErrorType::TypeError(expected, found) => {
-                write!(f, "Syntax Error: Expected type {:?}, found {:?} at {}:{}", expected, found, self.line, self.column)
-            }
+            // SyntaxErrorType::TypeError(expected, found) => {
+            //     write!(f, "Syntax Error: Expected type {:?}, found {:?} at {}:{}", expected, found, self.line, self.column)
+            // }
         }
     }
 }
@@ -55,11 +53,13 @@ pub enum RuntimeErrorType {
     //UnknownType(String),
     TypeInferenceFailed(),
     FailedEvaluatingExpression(),
-    CannotOperateOnType(String, Type),
-    IncompatibleTypes(Type, Type),
+    CannotOperateOnType(String, String),
+    Incompatible(Value, Value),
     CantAssignVariableToNull(),
     PropertyAccessOnTypeNotMap(),
     PropertyNotFound(),
+    ExpectedDiff(String),
+    Other(String)
 }
 #[derive(Debug)]
 pub struct RuntimeError {
@@ -82,11 +82,11 @@ impl Display for RuntimeError {
             RuntimeErrorType::FailedEvaluatingExpression() => {
                 write!(f, "Runtime Error: Failed evaluating expression ({}:{})", self.line, self.column)
             },
-            RuntimeErrorType::CannotOperateOnType(ref op, ty) => {
-                write!(f, "Runtime Error: Cannot operate with '{}' on type {:?} ({}:{})", op, ty, self.line, self.column)
+            RuntimeErrorType::CannotOperateOnType(ref op, ref str) => {
+                write!(f, "Runtime Error: Cannot operate with '{}' on {:?} ({}:{})", op, str, self.line, self.column)
             },
-            RuntimeErrorType::IncompatibleTypes(one, two) => {
-                write!(f, "Runtime Error: Incompatible types '{:?}' and '{:?}' ({}:{})", one, two, self.line, self.column)
+            RuntimeErrorType::Incompatible(ref one, ref two) => {
+                write!(f, "Runtime Error: Incompatible '{:?}' and '{:?}' ({}:{})", one, two, self.line, self.column)
             },
             RuntimeErrorType::CantAssignVariableToNull() => {
                 write!(f, "Runtime Error: Cannot assign a variable to type null ({}:{})", self.line, self.column)
@@ -95,7 +95,13 @@ impl Display for RuntimeError {
                 write!(f, "Runtime Error: Attempt to access a property on a type that is not a map ({}:{})", self.line, self.column)
             },
             RuntimeErrorType::PropertyNotFound() => {
-                write!(f, "Runtime Error: Property not found ({}:{}", self.line, self.column)
+                write!(f, "Runtime Error: Property not found ({}:{})", self.line, self.column)
+            },
+            RuntimeErrorType::ExpectedDiff(ref ty) => {
+                write!(f, "Runtime Error: Expected '{}' ({}:{})", ty, self.line, self.column)
+            },
+            RuntimeErrorType::Other(ref s) => {
+                write!(f, "{} ({}:{})", s, self.line, self.column)
             }
         }
     }

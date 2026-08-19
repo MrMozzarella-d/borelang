@@ -1,45 +1,71 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use log::__private_api::Value;
+use crate::builtins;
 use crate::error::{RuntimeError, RuntimeErrorType};
-use crate::node::{get_expr_type, Statement, StatementType, Type, ExpressionType, Expression};
+use crate::node::{Statement, StatementType, ExpressionType, Expression};
 use crate::token::TokenData;
 
 #[derive(Clone, Debug)]
-pub enum RuntimeValue {
-    Str(String),
+pub enum Value {
     Int(i64),
     Float(f64),
+    Str(Rc<String>),
     Bool(bool),
-    Map(HashMap<String, RuntimeValue>),
-    RustFunction(fn(Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeErrorType>),
+    List(Rc<RefCell<Vec<Value>>>),
+    Object {
+        name: String,
+        fields: Rc<RefCell<HashMap<String, Value>>>,
+    },
     BoreFunction(Rc<Statement>),
+    RustFunction(fn(args: Vec<Value>) -> Result<Value, RuntimeErrorType>),
     Null,
 }
-pub struct Variable {
-    is_mutable: bool,
-    ty: Type,
-    value: RuntimeValue,
-}
-pub struct Interpreter {
-    env: Environment,
-    ast: Vec<Statement>,
-}
-// impl RuntimeValue {
-//     pub fn from(value: &ExpressionType) -> Option<Self> {
-//         match value {
-//             ExpressionType::Boolean(b) => Some(RuntimeValue::Bool(*b)),
-//             ExpressionType::Integer(i) => Some(RuntimeValue::Int(*i)),
-//             ExpressionType::Float(f) => Some(RuntimeValue::Float(*f)),
-//             ExpressionType::String(s) => Some(RuntimeValue::Str(s.to_string())),
-//             _ => None,
+
+// #[derive(Debug, Clone, Hash, Eq, PartialEq)]
+// pub enum Type {
+//     Int,
+//     Float,
+//     Str,
+//     Bool,
+//     Null,
+//     Custom(String),
+//     Unresolved(String),
+// }
+// pub fn get_expr_type(expression: &Expression) -> Option<Type> {
+//     match expression.expression_type {
+//         ExpressionType::String(_) => Some(Type::Str),
+//         ExpressionType::Integer(_) => Some(Type::Int),
+//         ExpressionType::Float(_) => Some(Type::Float),
+//         ExpressionType::Boolean(_) => Some(Type::Bool),
+//         ExpressionType::BinaryOp { ref left, op: _, ref right } => {
+//             let left_ty = get_expr_type(left)?;
+//             let right_ty = get_expr_type(right)?;
+//             if left_ty == right_ty {
+//                 Some(left_ty)
+//             } else {
+//                 None
+//             }
 //         }
+//         _ => None,
 //     }
 // }
-#[derive(Clone)]
+// #[derive(Clone, Debug)]
+// pub enum TypeRule {
+//     Explicit(Type),
+//     Dynamic,
+// }
+#[derive(Clone, Debug)]
+pub struct Variable {
+    pub is_mutable: bool,
+    pub value: Value,
+}
+pub struct Interpreter {
+    ast: Vec<Statement>,
+}
+#[derive(Clone, Debug)]
 pub struct Environment {
-    values: HashMap<String, RuntimeValue>,
+    values: HashMap<String, Variable>,
     enclosing: Option<Rc<RefCell<Environment>>>
 }
 impl Environment {
@@ -49,21 +75,23 @@ impl Environment {
             enclosing,
         }
     }
-    pub fn define(&mut self, name: String, value: RuntimeValue) -> Result<&mut Environment, RuntimeErrorType> {
+    pub fn define(&mut self, name: String, var: Variable) -> Result<&mut Environment, RuntimeErrorType> {
         if self.values.contains_key(&name) {
             return Err(RuntimeErrorType::VariableAlreadySet(name));
         }
-        self.values.insert(name, value);
+        self.values.insert(name, var);
         Ok(self)
     }
-    pub fn get(&self, name: String) -> Result<RuntimeValue, RuntimeErrorType> {
-        if let Some(value) = self.values.get(&name) {
+    pub fn get(&self, name: &String) -> Result<Variable, RuntimeErrorType> {
+        if let Some(value) = self.values.get(name) {
             return Ok(value.clone());
         }
-        if self.enclosing.is_some() {
-            return self.enclosing.as_ref().unwrap().borrow().get(name);
+        if let Some(ref enc) = self.enclosing {
+            let borrow = enc.borrow();
+            let v = borrow.get(name);
+            return v;
         }
-        Err(RuntimeErrorType::VariableNotFound(name))
+        Err(RuntimeErrorType::VariableNotFound(name.clone()))
     }
 }
 impl Interpreter {
@@ -73,20 +101,43 @@ impl Interpreter {
         }
     }
     pub fn run(&self) -> Result<(), RuntimeError> {
-        let mut global_scope = HashMap::<String, Variable>::new();
+        let mut global_env = Environment::new(None);
+        // built-ins module
+        let builtins = builtins::Module::new();
+        match builtins.obj {
+            Value::Object { name: _, fields } => {
+                for field in fields.borrow().iter() {
+                    let var = Variable {
+                        is_mutable: false,
+                        value: field.1.clone(),
+                    };
+                    let v = global_env.define(field.0.clone(), var);
+                    if v.is_err() {
+                        return Err(RuntimeError {
+                            error_type: v.unwrap_err(),
+                            line: 1,
+                            column: 1,
+                        })
+                    };
+                }
+            }
+            _ => {} // this CANNOT happen
+        }
+
+        let rc = Rc::new(RefCell::new(global_env));
         for stmt in self.ast.iter() {
-            if let Err(e) = self.run_statement(stmt, &mut global_scope) {
+            if let Err(e) = self.run_statement(stmt, &rc) {
                 return Err(e);
             }
         }
         Ok(())
     }
-    pub fn run_statement(&self, stmt: &Statement, scope: &mut HashMap<String, Variable>) -> Result<(), RuntimeError> {
+    pub fn run_statement(&self, stmt: &Statement, env: &Rc<RefCell<Environment>>) -> Result<(), RuntimeError> {
         let ty = &stmt.statement_type;
         match ty {
-            StatementType::VariableDeclaration { mutable, name, ty, value } => {
+            StatementType::VariableDeclaration { mutable, name, value } => {
                 let name = name.to_string();
-                if scope.contains_key(&name) {
+                if let Ok(_) = env.borrow().get(&name) {
                     return Err(RuntimeError {
                         error_type: RuntimeErrorType::VariableAlreadySet(name),
                         line: stmt.line,
@@ -94,114 +145,92 @@ impl Interpreter {
                     })
                 }
                 if let Some(value) = value.clone() { // w/ value
-                    let runtime = self.evaluate_expression(&value, scope)?;
-                    if let Some(ty) = ty { // explicit
-                        if ty == &Type::Null {
-                            return Err(RuntimeError {
-                                error_type: RuntimeErrorType::CantAssignVariableToNull(),
-                                line: value.line,
-                                column: value.column,
-                            })
-                        }
-                        let var = Variable {
-                            is_mutable: *mutable,
-                            ty: *ty,
-                            value: runtime,
-                        };
-                        scope.insert(name, var);
-                    } else { // none
-                        let ty = get_expr_type(&value);
-                        if let Some(ty) = ty {
-                            let var = Variable {
-                                is_mutable: *mutable,
-                                ty,
-                                value: runtime,
-                            };
-                            scope.insert(name, var);
-                        } else {
-                            let line = value.line;
-                            let column = value.column;
-                            return Err(RuntimeError{
-                                error_type: RuntimeErrorType::TypeInferenceFailed(),
-                                line,
-                                column,
-                            })
-                        }
-                    }
-                } else { // w/o value
-                    if let Some(ty) = ty.clone() {
-                        let var = Variable {
-                            is_mutable: *mutable,
-                            ty,
-                            value: RuntimeValue::Null,
-                        };
-                        scope.insert(name, var);
+                    let runtime = self.evaluate_expression(&value, env)?;
+                    let var = Variable {
+                        is_mutable: *mutable,
+                        value: runtime,
                     };
+                    let mut borrow = env.borrow_mut();
+                    let v = borrow.define(name, var);
+                    if v.is_err() {
+                        return Err(RuntimeError {
+                            error_type: v.unwrap_err(),
+                            line: value.line,
+                            column: value.column,
+                        })
+                    }
+                } else { // none
+                    let var = Variable {
+                        is_mutable: *mutable,
+                        value: Value::Null,
+                    };
+                    let mut borrow = env.borrow_mut();
+                    let v = borrow.define(name, var);
+                    if v.is_err() {
+                        return Err(RuntimeError {
+                            error_type: v.unwrap_err(),
+                            line: stmt.line,
+                            column: stmt.column,
+                        })
+                    }
                 }
                 Ok(())
-            }
+            },
+            StatementType::Expression(expr) => {
+                let v = self.evaluate_expression(&expr, env);
+                let result = v.map(|_| ());
+                result
+            },
             _ => { Ok(()) }
         }
     }
     
-    pub fn evaluate_expression(&self, expression: &Expression, scope: &mut HashMap<String, Variable>) -> Result<RuntimeValue, RuntimeError> {
+    pub fn evaluate_expression(&self, expression: &Expression, env: &Rc<RefCell<Environment>>) -> Result<Value, RuntimeError> {
         match expression.expression_type {
             ExpressionType::BinaryOp{ref left, ref op, ref right} => {
-                let left_v = self.evaluate_expression(left, scope)?;
-                let right_v = self.evaluate_expression(right, scope)?;
+                let left_v = self.evaluate_expression(left, env)?;
+                let right_v = self.evaluate_expression(right, env)?;
                 match op.token_data {
                     TokenData::Add => match (left_v, right_v) {
-                        (RuntimeValue::Int(l), RuntimeValue::Int(r)) => Ok(RuntimeValue::Int(l + r)),
-                        (RuntimeValue::Float(l), RuntimeValue::Float(r)) => Ok(RuntimeValue::Float(l + r)),
-                        (RuntimeValue::Str(l), RuntimeValue::Str(r)) => Ok(RuntimeValue::Str(l + &r)),
-                        (_l_val, _r_val) => Err(RuntimeError {
-                            error_type: RuntimeErrorType::IncompatibleTypes(
-                                get_expr_type(left).unwrap_or(Type::Null),
-                                get_expr_type(right).unwrap_or(Type::Null),
-                            ),
+                        (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
+                        (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l + r)),
+                        (Value::Str(l), Value::Str(r)) => Ok(Value::Str(Rc::new(format!("{}{}", l, r)))),
+                        (l_val, r_val) => Err(RuntimeError {
+                            error_type: RuntimeErrorType::Incompatible(l_val, r_val),
                             line: right.line,
                             column: right.column,
                         })
                     },
                     TokenData::Sub => match (left_v, right_v) {
-                        (RuntimeValue::Int(l), RuntimeValue::Int(r)) => Ok(RuntimeValue::Int(l - r)),
-                        (RuntimeValue::Float(l), RuntimeValue::Float(r)) => Ok(RuntimeValue::Float(l - r)),
-                        (_l_val, _r_val) => Err(RuntimeError {
-                            error_type: RuntimeErrorType::IncompatibleTypes(
-                                get_expr_type(left).unwrap_or(Type::Null),
-                                get_expr_type(right).unwrap_or(Type::Null),
-                            ),
+                        (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l - r)),
+                        (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l - r)),
+                        (l_val, r_val) => Err(RuntimeError {
+                            error_type: RuntimeErrorType::Incompatible(l_val, r_val),
                             line: right.line,
                             column: right.column,
                         })
                     },
                     TokenData::Mul => match (left_v, right_v) {
-                        (RuntimeValue::Int(l), RuntimeValue::Int(r)) => Ok(RuntimeValue::Int(l * r)),
-                        (RuntimeValue::Float(l), RuntimeValue::Float(r)) => Ok(RuntimeValue::Float(l * r)),
-                        (RuntimeValue::Str(l), RuntimeValue::Int(r)) => {
+                        (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l * r)),
+                        (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l * r)),
+                        (Value::Str(l), Value::Int(r)) => {
                             let mut str = String::new();
                             for _ in 0..r {
                                 str = format!("{}{}", str, l);
                             };
-                            Ok(RuntimeValue::Str(str))
+                            Ok(Value::Str(Rc::new(str)))
                         }
-                        (_l_val, _r_val) => Err(RuntimeError {
-                            error_type: RuntimeErrorType::IncompatibleTypes(
-                                get_expr_type(left).unwrap_or(Type::Null),
-                                get_expr_type(right).unwrap_or(Type::Null),
-                            ),
+                        (l_val, r_val) => Err(RuntimeError {
+                            error_type: RuntimeErrorType::Incompatible(l_val, r_val),
                             line: right.line,
                             column: right.column,
                         })
                     },
                     TokenData::Div => match (left_v, right_v) {
-                        (RuntimeValue::Int(l), RuntimeValue::Int(r)) => Ok(RuntimeValue::Int(l / r)),
-                        (RuntimeValue::Float(l), RuntimeValue::Float(r)) => Ok(RuntimeValue::Float(l / r)),
-                        (_l_val, _r_val) => Err(RuntimeError {
-                            error_type: RuntimeErrorType::IncompatibleTypes(
-                                get_expr_type(left).unwrap_or(Type::Null),
-                                get_expr_type(right).unwrap_or(Type::Null),
-                            ),
+                        (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l / r)),
+                        (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l / r)),
+                        (l_val, r_val) => Err(RuntimeError {
+                            error_type: RuntimeErrorType::Incompatible(l_val, r_val),
                             line: right.line,
                             column: right.column,
                         })
@@ -209,25 +238,26 @@ impl Interpreter {
                     _ => todo!("Assignment operators (AddAssign, Assignment, etc.)")
                 }
             },
-            ExpressionType::Integer(i) => Ok(RuntimeValue::Int(i)),
-            ExpressionType::Boolean(b) => Ok(RuntimeValue::Bool(b)),
-            ExpressionType::String(ref s) => Ok(RuntimeValue::Str(s.to_string())),
-            // ExpressionType::Identifier(name) => {
-            //     if let Some(val) = scope.get(&name) {
-            //         self.evaluate_expression(val)
-            //     } else {
-            //         Err(RuntimeError {
-            //             error_type: RuntimeErrorType::VariableNotFound(name),
-            //             line: expression.line,
-            //             column: expression.column,
-            //         })
-            //     }
-            // }
+            ExpressionType::Integer(i) => Ok(Value::Int(i)),
+            ExpressionType::Boolean(b) => Ok(Value::Bool(b)),
+            ExpressionType::String(ref s) => Ok(Value::Str(Rc::new(s.clone()))),
+            ExpressionType::Identifier(ref name) => {
+                if let Ok(var) = env.borrow().get(&name) {
+                    Ok(var.value)
+                } else {
+                    Err(RuntimeError {
+                        error_type: RuntimeErrorType::VariableNotFound(name.clone()),
+                        line: expression.line,
+                        column: expression.column,
+                    })
+                }
+            }
             ExpressionType::PropertyAccess {ref object, ref property} => {
-                let left = self.evaluate_expression(&object, scope)?;
+                let left = self.evaluate_expression(&object, env)?;
                 match left {
-                    RuntimeValue::Map(ref map) => {
-                        if let Some(v) = map.get(property) {
+                    Value::Object{ref name, ref fields} => {
+                        let borrow = fields.borrow();
+                        if let Some(v) = borrow.get(property) {
                             Ok(v.to_owned())
                         } else {
                             Err(RuntimeError {
@@ -245,27 +275,24 @@ impl Interpreter {
                 }
             },
             ExpressionType::Call {ref callee, ref args} => {
-                let callee_v = self.evaluate_expression(callee, scope)?;
+                let callee_v = self.evaluate_expression(callee, env)?;
                 let mut arg_v = Vec::new();
                 for arg in args {
-                    let v = self.evaluate_expression(arg, scope)?;
+                    let v = self.evaluate_expression(arg, env)?;
                     arg_v.push(v);
                 }
                 match callee_v {
-                    RuntimeValue::BoreFunction(func) => {
-                        let v = self.run_function(func, arg_v);
+                    Value::BoreFunction(func) => {
+                        let v = self.run_function(func, arg_v, env);
                         v
                     },
-                    RuntimeValue::RustFunction(func) => {
-                        let v = func(arg_v);
-                        if v.is_err() {
-                            return Err(RuntimeError {
-                                error_type: v.unwrap_err(),
+                    Value::RustFunction(func) => {
+                        func(arg_v)
+                            .map_err(|ty| RuntimeError {
+                                error_type: ty,
                                 line: callee.line,
                                 column: callee.column,
-                            });
-                        };
-                        v.map_err(|typ| RuntimeError { error_type: typ, line: callee.line, column: callee.column })
+                            })
                     },
                     _ => Err(RuntimeError {
                         error_type: RuntimeErrorType::FailedEvaluatingExpression(),
@@ -278,17 +305,25 @@ impl Interpreter {
                 error_type: RuntimeErrorType::FailedEvaluatingExpression(),
                 line: expression.line,
                 column: expression.column,
-            })
+            }),
         }
     }
 
-    pub fn run_function(&self, fn_stmt: Rc<Statement>, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    pub fn run_function(&self, fn_stmt: Rc<Statement>, args: Vec<Value>, prev_env: &Rc<RefCell<Environment>>) -> Result<Value, RuntimeError> {
+        let fn_env = Environment::new(Some(prev_env.clone()));
+        let fn_env_rc = Rc::new(RefCell::new(fn_env));
         match fn_stmt.statement_type {
             StatementType::FunctionDeclaration {ref name, ref params, ref body} => {
                 for stmt in body {
-                    self.run_statement(stmt, )
-                }
+                    self.run_statement(stmt, &fn_env_rc)?;
+                };
+                todo!()
             }
+            _ => Err(RuntimeError{
+                error_type: RuntimeErrorType::ExpectedDiff("function".to_string()),
+                line: fn_stmt.line,
+                column: fn_stmt.column,
+            })
         }
     }
 }

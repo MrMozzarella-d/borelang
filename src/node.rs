@@ -1,4 +1,4 @@
-use crate::token::{Token};
+use crate::token::Token;
 
 #[derive(Debug, Clone)]
 pub enum ExpressionType {
@@ -8,7 +8,6 @@ pub enum ExpressionType {
     String(String),
     Boolean(bool),
     //Object(Vec<(&'a str, Expression<'a>)>), <- i dont remember why i need this but i may in the future
-
     BinaryOp {
         left: Box<Expression>,
         op: Token,
@@ -48,7 +47,6 @@ pub enum StatementType {
     VariableDeclaration {
         mutable: bool,
         name: String,
-        ty: Option<Type>,
         value: Option<Expression>,
     },
     ForLoop {
@@ -68,42 +66,4 @@ pub struct Statement {
     pub(crate) statement_type: StatementType,
     pub(crate) line: usize,
     pub(crate) column: usize,
-}
-
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
-pub enum Type {
-    Str,
-    Int,
-    Bool,
-    Float,
-    Null,
-}
-pub fn get_type(name: &String) -> Option<Type> {
-    match name.as_str() {
-        "str"  => Some(Type::Str),
-        "int"  => Some(Type::Int),
-        "bool" => Some(Type::Bool),
-        "float" => Some(Type::Float),
-        "null" => Some(Type::Null),
-        _      => None,
-    }
-}
-
-pub fn get_expr_type(expression: &Expression) -> Option<Type> {
-    match expression.expression_type {
-        ExpressionType::String(_) => Some(Type::Str),
-        ExpressionType::Integer(_) => Some(Type::Int),
-        ExpressionType::Float(_) => Some(Type::Float),
-        ExpressionType::Boolean(_) => Some(Type::Bool),
-        ExpressionType::BinaryOp { ref left, op: _, ref right } => {
-            let left_ty = get_expr_type(left)?;
-            let right_ty = get_expr_type(right)?;
-            if left_ty == right_ty {
-                Some(left_ty)
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
 }

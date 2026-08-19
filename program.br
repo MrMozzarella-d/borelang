@@ -1,3 +1,2 @@
-import stdlib
-
-stdlib.io.println("Hello, world!")
+let i = (2 + 2) * 3
+println(i)

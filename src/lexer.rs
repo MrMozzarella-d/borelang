@@ -20,7 +20,7 @@ impl<'a> Lexer<'a> {
     }
     fn advance(&mut self) -> char {
         if Lexer::is_at_end(self) { return char::from(0); }
-        let char = self.source.as_bytes().to_vec()[self.current] as char;
+        let char = self.source.as_bytes()[self.current] as char;
         self.current += 1;
         self.column += 1;
         if char == '\n' {
@@ -31,11 +31,11 @@ impl<'a> Lexer<'a> {
     }
     fn peek(&self) -> char {
         if self.is_at_end() { return char::from(0); }
-        self.source.as_bytes().to_vec()[self.current] as char
+        self.source.as_bytes()[self.current] as char
     }
     fn peek_next(&self) -> char {
         if self.current + 1 >= self.source.len() { return char::from(0); }
-        self.source.as_bytes().to_vec()[self.current + 1] as char
+        self.source.as_bytes()[self.current + 1] as char
     }
     fn is_at_end(&self) -> bool { self.current >= self.source.len() }
 
@@ -136,21 +136,29 @@ impl<'a> Lexer<'a> {
                         self.column,
                     ));
                 },
+                // '\'' => {
+                //     if self.peek() != '\'' {
+                //         
+                //     }
+                // }
                 ';' => {
-                    if self.advance() == ';' {
-                        token_vec.push(Token::new(TokenData::Return, self.line, self.column))
+                    if self.peek() == ';' {
+                        token_vec.push(Token::new(TokenData::Return, self.line, self.column));
+                        self.advance();
                     } else {
                         token_vec.push(Token::new(TokenData::Semicolon, self.line, self.column))
                     }
                 },
                 '&' => {
-                    if self.advance() == '&' {
-                        token_vec.push(Token::new(TokenData::And, self.line, self.column))
+                    if self.peek() == '&' {
+                        token_vec.push(Token::new(TokenData::And, self.line, self.column));
+                        self.advance();
                     }
                 },
                 '?' => {
-                    if self.advance() == '?' {
-                        token_vec.push(Token::new(TokenData::Or, self.line, self.column))
+                    if self.peek() == '?' {
+                        token_vec.push(Token::new(TokenData::Or, self.line, self.column));
+                        self.advance();
                     }
                 }
                 ':' => token_vec.push(Token::new(TokenData::Colon, self.line, self.column)),
@@ -163,7 +171,8 @@ impl<'a> Lexer<'a> {
                 ',' => token_vec.push(Token::new(TokenData::Comma, self.line, self.column, )),
                 '.' => {
                     if self.peek() == '.' {
-                        token_vec.push(Token::new(TokenData::Range, self.line, self.column))
+                        token_vec.push(Token::new(TokenData::Range, self.line, self.column));
+                        self.advance();
                     } else {
                         token_vec.push(Token::new(TokenData::Dot, self.line, self.column))
                     }

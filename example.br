@@ -1,9 +1,11 @@
-let base: int = 42
+import random
+
+let base = 42
 
 println("hi")
 mut score = base * 2
 let letted_score = score
-score = calculate_stuff(score).final
+score = calculate_stuff(score)
 if score == 4200 {
     println("Oh wow, that is very interesting")
 } else {
@@ -13,9 +15,11 @@ if score == 4200 {
 for i in 0..score {
     println("{}", i)
     print("wow ")
-    println("{} is great", letted_score * i)
+    if random.randi_range(0, 20) == 2 {
+      println("{} is great", letted_score * i)
+    }
 }
 
 fn calculate_stuff(score: int) {
-    ;;score * 42
+    return score * 42
 }

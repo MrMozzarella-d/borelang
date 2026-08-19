@@ -26,12 +26,9 @@ impl AstTreePrinter {
     }
     pub fn print_statement(&mut self, stmt: &Statement) -> String {
         match &stmt.statement_type {
-            StatementType::VariableDeclaration { mutable, name, ty, value } => {
+            StatementType::VariableDeclaration { mutable, name, value } => {
                 let mut r = self.p(&format!("VariableDeclaration (name: '{}', mut: {})", name, mutable));
                 self.indent();
-                if let Some(t) = ty {
-                    r.push_str(&self.p(&format!("Type: {:?}", t)));
-                }
                 if let Some(v) = value {
                     r.push_str(&self.p("Value:"));
                     self.indent();
