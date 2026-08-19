@@ -136,7 +136,7 @@ impl Interpreter {
                     return Err(RuntimeError {
                         error_type: v.unwrap_err(),
                         line: stmt.line,
-                        column: stmt.column, 
+                        column: stmt.column,
                     })
                 }
             }
@@ -332,6 +332,13 @@ impl Interpreter {
         let fn_env_rc = Rc::new(RefCell::new(fn_env));
         match fn_stmt.statement_type {
             StatementType::FunctionDeclaration {ref name, ref params, ref body} => {
+                if params.iter().count() != args.iter().count() {
+                    return Err(RuntimeError {
+                        error_type: RuntimeErrorType::FunctionShippedWithWrongAmountOfArgs(name.clone(), params.iter().count(), args.iter().count()),
+                        line: fn_stmt.line,
+                        column: fn_stmt.column,
+                    })
+                }
                 for i in 0..params.iter().count() {
                     let param = params.get(i).unwrap();
                     if let Some(arg) = args.get(i) {
@@ -344,19 +351,21 @@ impl Interpreter {
                                 column: fn_stmt.column,
                             })
                         }
-                    } else {
-                        return Err(RuntimeError {
-                            error_type: RuntimeErrorType::FunctionShippedWithWrongAmountOfArgs(name.clone(), params.iter().count(), args.iter().count()),
-                            line: fn_stmt.line,
-                            column: fn_stmt.column,
-                        })
                     }
                 }
 
                 for stmt in body {
+                    if let StatementType::Return(ref expr) = stmt.statement_type { // if return
+                        return if let Some(expr) = expr {
+                            let value = self.evaluate_expression(expr, &fn_env_rc)?;
+                            Ok(value)
+                        } else {
+                            Ok(Value::Null)
+                        }
+                    };
                     self.run_statement(stmt, &fn_env_rc)?;
                 };
-                Ok(Value::Null) // todo: replace this placeholder lazy fuck
+                Ok(Value::Null) // no return, null
             }
             _ => Err(RuntimeError{
                 error_type: RuntimeErrorType::ExpectedDiff("function".to_string()),

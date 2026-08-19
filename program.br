@@ -1,5 +1,10 @@
-greet("world")
+let greeting = get_greeting("world")
+greet(greeting)
 
 fn greet(who) {
     println("Hello, ", who, "!")
+}
+
+fn get_greeting(who) {
+    return who # i dont have a way to concencate strings yet so this will have to do
 }
