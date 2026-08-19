@@ -1,2 +1,5 @@
-let i = (2 + 2) * 3
-println(i)
+greet("world")
+
+fn greet(who) {
+    println("Hello, ", who, "!")
+}

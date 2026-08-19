@@ -141,14 +141,6 @@ impl<'a> Lexer<'a> {
                 //         
                 //     }
                 // }
-                ';' => {
-                    if self.peek() == ';' {
-                        token_vec.push(Token::new(TokenData::Return, self.line, self.column));
-                        self.advance();
-                    } else {
-                        token_vec.push(Token::new(TokenData::Semicolon, self.line, self.column))
-                    }
-                },
                 '&' => {
                     if self.peek() == '&' {
                         token_vec.push(Token::new(TokenData::And, self.line, self.column));
@@ -161,6 +153,7 @@ impl<'a> Lexer<'a> {
                         self.advance();
                     }
                 }
+                ';' =>token_vec.push(Token::new(TokenData::Semicolon, self.line, self.column)),
                 ':' => token_vec.push(Token::new(TokenData::Colon, self.line, self.column)),
                 '{' => token_vec.push(Token::new(TokenData::OpenBody, self.line, self.column, )),
                 '}' => token_vec.push(Token::new(TokenData::CloseBody, self.line, self.column, )),

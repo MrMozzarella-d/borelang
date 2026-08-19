@@ -31,13 +31,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let time_lexer = std::time::SystemTime::now();
     let mut lexer = Lexer::new(&*content);
     let tokens = lexer.tokenize();
-    let dur_lex = std::time::SystemTime::now().duration_since(time_lexer)?.as_nanos();
+    let dur_lex = std::time::SystemTime::now().duration_since(time_lexer)?.as_secs_f64();
     // for token in tokens.iter() {
     //     println!("      {:?}", token);
     // }
     let time_parser = std::time::SystemTime::now();
     let mut parser = Parser::new(tokens);
-    let dur_parse = std::time::SystemTime::now().duration_since(time_parser)?.as_nanos();
+    let dur_parse = std::time::SystemTime::now().duration_since(time_parser)?.as_secs_f64();
     let statements_res = parser.parse();
     let mut dur_inter = None;
     if statements_res.is_err() {
@@ -51,16 +51,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = interpreter.run() {
             eprintln!("{}", e);
         }
-        dur_inter = Some(std::time::SystemTime::now().duration_since(time_interpret)?.as_nanos());
+        dur_inter = Some(std::time::SystemTime::now().duration_since(time_interpret)?.as_secs_f64());
     }
 
     let time_now = std::time::SystemTime::now();
-    let dur = time_now.duration_since(time_start)?.as_nanos();
+    let dur = time_now.duration_since(time_start)?.as_secs_f64();
     println!("total: {}", dur);
     println!("time lexer: {}", dur_lex);
     println!("time parser: {}", dur_parse);
     if let Some(dur_inter) = dur_inter {
         println!("time interpreter: {}", dur_inter);
+    } else {
+        println!("interpreter crashed")
     }
     Ok(())
 }

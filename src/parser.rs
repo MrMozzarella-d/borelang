@@ -114,13 +114,13 @@ impl Parser {
                     "let" => self.parse_var(false),
                     "mut" => self.parse_var(true),
                     "for" => self.parse_for(),
+                    "return" => self.parse_return(),
                     _ => Ok(Statement {
                         statement_type: StatementType::Expression(self.parse_expression(0)?),
                         line,
                         column,
                     }),
                 },
-                TokenData::Return => self.parse_return(),
                 _ => Err(SyntaxError {
                     error_type: SyntaxErrorType::Expected(
                         TokenData::Literal("".to_string()),
@@ -343,11 +343,11 @@ impl Parser {
         let line = start.line;
         let column = start.column;
         let name = self.expect_literal()?;
-        if self.peek().map(|t| t.token_data == TokenData::Colon)? {
-            // dynamic / explicit
-            self.expect(TokenData::Colon)?; // consume colon
-            let literal = self.expect_literal()?;
-        }
+        // if self.peek().map(|t| t.token_data == TokenData::Colon)? { // no more
+        //     // dynamic / explicit 
+        //     self.expect(TokenData::Colon)?; // consume colon
+        //     let literal = self.expect_literal()?;
+        // }
         if self.peek().map(|t| t.token_data == TokenData::Equal)? {
             self.expect(TokenData::Equal)?; // consume equal
             let expr = self.parse_expression(0)?;

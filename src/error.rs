@@ -59,7 +59,8 @@ pub enum RuntimeErrorType {
     PropertyAccessOnTypeNotMap(),
     PropertyNotFound(),
     ExpectedDiff(String),
-    Other(String)
+    Other(String),
+    FunctionShippedWithWrongAmountOfArgs(String, usize, usize),
 }
 #[derive(Debug)]
 pub struct RuntimeError {
@@ -102,6 +103,9 @@ impl Display for RuntimeError {
             },
             RuntimeErrorType::Other(ref s) => {
                 write!(f, "{} ({}:{})", s, self.line, self.column)
+            }
+            RuntimeErrorType::FunctionShippedWithWrongAmountOfArgs(ref s, ref expected, ref got) => {
+                write!(f, "Runtime Error: Function '{}' expected {} arguments, but got {} ({}:{})", s, expected, got, self.line, self.column)
             }
         }
     }

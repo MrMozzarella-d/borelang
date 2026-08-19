@@ -123,6 +123,24 @@ impl Interpreter {
             }
             _ => {} // this CANNOT happen
         }
+        // pre-register of all functions
+        for stmt in self.ast.iter() {
+            if let StatementType::FunctionDeclaration { ref name, params: _, body: _ } = stmt.statement_type {
+                let func_v = Value::BoreFunction(Rc::new(stmt.clone()));
+                let var = Variable {
+                    is_mutable: false,
+                    value: func_v,
+                };
+                let v = global_env.define(name.clone(), var);
+                if v.is_err() {
+                    return Err(RuntimeError {
+                        error_type: v.unwrap_err(),
+                        line: stmt.line,
+                        column: stmt.column, 
+                    })
+                }
+            }
+        }
 
         let rc = Rc::new(RefCell::new(global_env));
         for stmt in self.ast.iter() {
@@ -314,10 +332,31 @@ impl Interpreter {
         let fn_env_rc = Rc::new(RefCell::new(fn_env));
         match fn_stmt.statement_type {
             StatementType::FunctionDeclaration {ref name, ref params, ref body} => {
+                for i in 0..params.iter().count() {
+                    let param = params.get(i).unwrap();
+                    if let Some(arg) = args.get(i) {
+                        let mut borrow = fn_env_rc.borrow_mut();
+                        let v = borrow.define(param.clone(), Variable {is_mutable: true, value: arg.clone()});
+                        if v.is_err() {
+                            return Err(RuntimeError {
+                                error_type: v.unwrap_err(),
+                                line: fn_stmt.line,
+                                column: fn_stmt.column,
+                            })
+                        }
+                    } else {
+                        return Err(RuntimeError {
+                            error_type: RuntimeErrorType::FunctionShippedWithWrongAmountOfArgs(name.clone(), params.iter().count(), args.iter().count()),
+                            line: fn_stmt.line,
+                            column: fn_stmt.column,
+                        })
+                    }
+                }
+
                 for stmt in body {
                     self.run_statement(stmt, &fn_env_rc)?;
                 };
-                todo!()
+                Ok(Value::Null) // todo: replace this placeholder lazy fuck
             }
             _ => Err(RuntimeError{
                 error_type: RuntimeErrorType::ExpectedDiff("function".to_string()),

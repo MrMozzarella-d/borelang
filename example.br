@@ -20,6 +20,6 @@ for i in 0..score {
     }
 }
 
-fn calculate_stuff(score: int) {
+fn calculate_stuff(let score, mut test) {
     return score * 42
 }
