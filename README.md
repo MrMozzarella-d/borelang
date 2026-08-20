@@ -17,7 +17,7 @@
 greet("world")
 
 fn greet(who) {
-  println("Hello, ", world, "!")
+  println("Hello, ", who, "!")
 }
 ```
 
