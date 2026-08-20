@@ -83,6 +83,17 @@ impl Parser {
             })
         }
     }
+    fn peek_next(&self) -> Result<&Token, SyntaxError> {
+        if let Some(tk) = self.tokens.get(self.current + 1) {
+            Ok(tk)
+        } else {
+            Err(SyntaxError {
+                error_type: SyntaxErrorType::Unexpected(TokenData::EOF),
+                line: 0,
+                column: 0,
+            })
+        }
+    }
     pub(crate) fn parse(&mut self) -> Result<Vec<Statement>, SyntaxError> {
         let mut statement_vec: Vec<Statement> = Vec::new();
         while self.current < self.tokens.len() {
@@ -115,6 +126,8 @@ impl Parser {
                     "mut" => self.parse_var(true),
                     "for" => self.parse_for(),
                     "return" => self.parse_return(),
+                    "import" => self.parse_import(),
+                    "if" => self.parse_if(),
                     _ => Ok(Statement {
                         statement_type: StatementType::Expression(self.parse_expression(0)?),
                         line,
@@ -471,6 +484,56 @@ impl Parser {
             line,
             column,
         })
+    }
+    fn parse_if(&mut self) -> Result<Statement, SyntaxError> {
+        let i = self.advance(); // if
+        let line = i.line;
+        let column = i.column;
+        let condition = self.parse_expression(0)?;
+        self.expect(TokenData::OpenBody)?;
+        let mut then_body = Vec::new();
+        while self.current < self.tokens.len() {
+            let stmt = self.parse_statement()?;
+            then_body.push(stmt);
+            if self.peek()?.token_data == TokenData::CloseBody {
+                break;
+            }
+        };
+        if self.peek_next()?.token_data == TokenData::Literal("else".into()) {
+            self.advance(); self.advance(); // advance to else, then to next token
+            self.expect(TokenData::OpenBody)?;
+            let mut else_body = Vec::new();
+            while self.current < self.tokens.len() {
+                let stmt = self.parse_statement()?;
+                else_body.push(stmt);
+                if self.peek()?.token_data == TokenData::CloseBody {
+                    break;
+                }
+            };
+            self.expect(TokenData::CloseBody)?;
+            let stmt = StatementType::If {
+                condition,
+                then_branch: then_body,
+                else_branch: Some(else_body),
+            };
+            Ok(Statement {
+                statement_type: stmt,
+                line,
+                column,
+            })
+        } else {
+            self.advance();
+            let stmt = StatementType::If {
+                condition,
+                then_branch: then_body,
+                else_branch: None,
+            };
+            Ok(Statement {
+                statement_type: stmt,
+                line,
+                column,
+            })
+        }
     }
 }
 

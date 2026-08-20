@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::io::{stdout, BufWriter, Stdout, Write};
 use std::rc::Rc;
+use std::sync::Mutex;
 use crate::error::RuntimeErrorType;
 use crate::interpreter::Value;
 
@@ -23,27 +25,36 @@ impl Module {
     }
 }
 pub fn println(args: Vec<Value>) -> Result<Value, RuntimeErrorType> {
+    let mut lock = _stdout().lock().unwrap();
     for arg in args {
         match arg {
-            Value::Bool(b) => print!("{}", b),
-            Value::Int(i) => print!("{}", i),
-            Value::Float(f) => print!("{}", f),
-            Value::Str(s) => print!("{}", s),
+            Value::Bool(b) => { write!(lock, "{} ", b).unwrap(); },
+            Value::Int(i) => { write!(lock, "{} ", i).unwrap();  },
+            Value::Float(f) => { write!(lock, "{} ", f).unwrap();  },
+            Value::Str(s) => { write!(lock, "{} ", s).unwrap();  },
             _ => return Err(RuntimeErrorType::Other("Cannot print type".to_string()))
         }
     }
-    println!();
+    writeln!(lock).unwrap();
+    lock.flush().unwrap();
     Ok(Value::Null)
 }
 pub fn print(args: Vec<Value>) -> Result<Value, RuntimeErrorType> {
+    let mut lock = _stdout().lock().unwrap();
     for arg in args {
         match arg {
-            Value::Bool(b) => print!("{}", b),
-            Value::Int(i) => print!("{}", i),
-            Value::Float(f) => print!("{}", f),
-            Value::Str(s) => print!("{}", s),
+            Value::Bool(b) => { write!(lock, "{} ", b).unwrap(); },
+            Value::Int(i) => { write!(lock, "{} ", i).unwrap();  },
+            Value::Float(f) => { write!(lock, "{} ", f).unwrap();  },
+            Value::Str(s) => { write!(lock, "{} ", s).unwrap();  },
             _ => return Err(RuntimeErrorType::Other("Cannot print type".to_string()))
         }
     }
+    lock.flush().unwrap();
     Ok(Value::Null)
+}
+
+fn _stdout() -> &'static Mutex<BufWriter<Stdout>> {
+    static WRITER: std::sync::OnceLock<Mutex<BufWriter<Stdout>>> = std::sync::OnceLock::new();
+    WRITER.get_or_init(|| Mutex::new(BufWriter::new(stdout())))
 }

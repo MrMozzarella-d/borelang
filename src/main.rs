@@ -37,8 +37,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // }
     let time_parser = std::time::SystemTime::now();
     let mut parser = Parser::new(tokens);
-    let dur_parse = std::time::SystemTime::now().duration_since(time_parser)?.as_secs_f64();
     let statements_res = parser.parse();
+    let dur_parse = std::time::SystemTime::now().duration_since(time_parser)?.as_secs_f64();
     let mut dur_inter = None;
     if statements_res.is_err() {
         eprintln!("{}", statements_res.unwrap_err());
@@ -56,6 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let time_now = std::time::SystemTime::now();
     let dur = time_now.duration_since(time_start)?.as_secs_f64();
+    println!();
     println!("total: {}", dur);
     println!("time lexer: {}", dur_lex);
     println!("time parser: {}", dur_parse);

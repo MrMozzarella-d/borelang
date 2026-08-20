@@ -74,7 +74,7 @@ impl<'a> Lexer<'a> {
             if char.is_numeric() {
                 while self.current < self.source.len() {
                     let next = self.peek();
-                    if next.is_numeric() || (next == '.' && self.peek_next().is_numeric()) {
+                    if next.is_numeric() || (next == '.' && self.peek_next().is_numeric()) || next == '_' {
                         self.advance();
                     } else {
                         break;
@@ -82,6 +82,7 @@ impl<'a> Lexer<'a> {
                 }
                 let end_pos = self.current;
                 let val = &self.source[start_pos..end_pos];
+                let val = val.replace("_", "");
                 if val.contains('.') {
                     token_vec.push(Token::new(
                         TokenData::FloatLiteral(val.parse().unwrap()),

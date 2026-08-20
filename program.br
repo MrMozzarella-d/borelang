@@ -1,10 +1,12 @@
-let greeting = get_greeting("world")
-greet(greeting)
+HelloWorld("print")
+HelloWorld("println")
 
-fn greet(who) {
-    println("Hello, ", who, "!")
-}
-
-fn get_greeting(who) {
-    return who # i dont have a way to concencate strings yet so this will have to do
-}
+fn HelloWorld(msg) {
+    if msg == "println" {
+        println("Hello, world!")
+    } else {
+        if msg == "print" {
+            print("Hello, world!")
+        }
+    }
+} 

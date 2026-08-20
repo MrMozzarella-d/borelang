@@ -75,11 +75,11 @@ impl Environment {
             enclosing,
         }
     }
-    pub fn define(&mut self, name: String, var: Variable) -> Result<&mut Environment, RuntimeErrorType> {
-        if self.values.contains_key(&name) {
-            return Err(RuntimeErrorType::VariableAlreadySet(name));
+    pub fn define(&mut self, name: &String, var: Variable) -> Result<&mut Environment, RuntimeErrorType> {
+        if self.values.contains_key(name) {
+            return Err(RuntimeErrorType::VariableAlreadySet(name.clone()));
         }
-        self.values.insert(name, var);
+        self.values.insert(name.clone(), var);
         Ok(self)
     }
     pub fn get(&self, name: &String) -> Result<Variable, RuntimeErrorType> {
@@ -92,6 +92,19 @@ impl Environment {
             return v;
         }
         Err(RuntimeErrorType::VariableNotFound(name.clone()))
+    }
+    pub fn set(&mut self, name: &String, new: &Value) -> Result<&mut Environment, RuntimeErrorType> {
+        if let Some(value) = self.values.get_mut(name) {
+            value.value = new.clone();
+        } else {
+            if let Some(ref enclosing) = self.enclosing {
+                let mut borrow = enclosing.borrow_mut();
+                borrow.set(name, new)?;
+            } else {
+                return Err(RuntimeErrorType::VariableNotFound(name.clone()))
+            }
+        }
+        Ok(self)
     }
 }
 impl Interpreter {
@@ -111,14 +124,8 @@ impl Interpreter {
                         is_mutable: false,
                         value: field.1.clone(),
                     };
-                    let v = global_env.define(field.0.clone(), var);
-                    if v.is_err() {
-                        return Err(RuntimeError {
-                            error_type: v.unwrap_err(),
-                            line: 1,
-                            column: 1,
-                        })
-                    };
+                    let v = global_env.define(field.0, var);
+                    self.comply_def_err(v, 1, 0)?;
                 }
             }
             _ => {} // this CANNOT happen
@@ -131,14 +138,8 @@ impl Interpreter {
                     is_mutable: false,
                     value: func_v,
                 };
-                let v = global_env.define(name.clone(), var);
-                if v.is_err() {
-                    return Err(RuntimeError {
-                        error_type: v.unwrap_err(),
-                        line: stmt.line,
-                        column: stmt.column,
-                    })
-                }
+                let v = global_env.define(name, var);
+                self.comply_def_err(v, stmt.line, stmt.column)?;
             }
         }
 
@@ -169,30 +170,21 @@ impl Interpreter {
                         value: runtime,
                     };
                     let mut borrow = env.borrow_mut();
-                    let v = borrow.define(name, var);
-                    if v.is_err() {
-                        return Err(RuntimeError {
-                            error_type: v.unwrap_err(),
-                            line: value.line,
-                            column: value.column,
-                        })
-                    }
+                    let v = borrow.define(&name, var);
+                    self.comply_def_err(v, value.line, value.column)?;
                 } else { // none
                     let var = Variable {
                         is_mutable: *mutable,
                         value: Value::Null,
                     };
                     let mut borrow = env.borrow_mut();
-                    let v = borrow.define(name, var);
-                    if v.is_err() {
-                        return Err(RuntimeError {
-                            error_type: v.unwrap_err(),
-                            line: stmt.line,
-                            column: stmt.column,
-                        })
-                    }
+                    let v = borrow.define(&name, var);
+                    self.comply_def_err(v, stmt.line, stmt.column)?;
                 }
                 Ok(())
+            },
+            StatementType::ForLoop { var_decl: _, start: _, end: _, body: _ } | StatementType::If { condition: _, then_branch: _, else_branch: _ } => {
+                self.run_body(stmt, env)
             },
             StatementType::Expression(expr) => {
                 let v = self.evaluate_expression(&expr, env);
@@ -253,6 +245,18 @@ impl Interpreter {
                             column: right.column,
                         })
                     },
+                    TokenData::Equivalent => match (left_v, right_v) {
+                        (Value::Int(l), Value::Int(r)) => Ok(Value::Bool(l == r)),
+                        (Value::Float(l), Value::Float(r)) => Ok(Value::Bool(l == r)),
+                        (Value::Str(l), Value::Str(r)) => Ok(Value::Bool(l == r)),
+                        (Value::RustFunction(l), Value::RustFunction(r)) => Ok(Value::Bool(std::ptr::fn_addr_eq(l, r))),
+                        (Value::BoreFunction(l), Value::BoreFunction(r)) => Ok(Value::Bool(std::ptr::eq(&l, &r))),
+                        (l_val, r_val) => Err(RuntimeError {
+                            error_type: RuntimeErrorType::Incompatible(l_val, r_val),
+                            line: right.line,
+                            column: right.column,
+                        })
+                    }
                     _ => todo!("Assignment operators (AddAssign, Assignment, etc.)")
                 }
             },
@@ -273,7 +277,7 @@ impl Interpreter {
             ExpressionType::PropertyAccess {ref object, ref property} => {
                 let left = self.evaluate_expression(&object, env)?;
                 match left {
-                    Value::Object{ref name, ref fields} => {
+                    Value::Object{name: _, ref fields} => {
                         let borrow = fields.borrow();
                         if let Some(v) = borrow.get(property) {
                             Ok(v.to_owned())
@@ -343,14 +347,8 @@ impl Interpreter {
                     let param = params.get(i).unwrap();
                     if let Some(arg) = args.get(i) {
                         let mut borrow = fn_env_rc.borrow_mut();
-                        let v = borrow.define(param.clone(), Variable {is_mutable: true, value: arg.clone()});
-                        if v.is_err() {
-                            return Err(RuntimeError {
-                                error_type: v.unwrap_err(),
-                                line: fn_stmt.line,
-                                column: fn_stmt.column,
-                            })
-                        }
+                        let v = borrow.define(param, Variable {is_mutable: true, value: arg.clone()});
+                        self.comply_def_err(v, fn_stmt.line, fn_stmt.column)?;
                     }
                 }
 
@@ -373,5 +371,93 @@ impl Interpreter {
                 column: fn_stmt.column,
             })
         }
+    }
+
+    pub fn run_body(&self, block: &Statement, prev_env: &Rc<RefCell<Environment>>) -> Result<(), RuntimeError> {
+        let bd_env = Environment::new(Some(prev_env.clone()));
+        let rc = Rc::new(RefCell::new(bd_env));
+        match block.statement_type {
+            StatementType::If { ref condition, ref then_branch, ref else_branch} => {
+                let hit = self.evaluate_expression(condition, &rc)?;
+                if let Value::Bool(b) = hit {
+                    if b {
+                        for stmt in then_branch.iter() {
+                            self.run_statement(stmt, &rc)?;
+                        }
+                    } else {
+                        if let Some(else_branch) = else_branch {
+                            for stmt in else_branch.iter() {
+                                self.run_statement(stmt, &rc)?;
+                            }
+                        }
+                    }
+                }
+            },
+            StatementType::ForLoop {ref var_decl, ref start, ref end, ref body} => {
+                if let StatementType::VariableDeclaration { ref mutable, ref name, ref value } = var_decl.statement_type {
+                    if let Some(val) = value { // set val
+                        let val_v = self.evaluate_expression(&val, &rc)?;
+                        let var = Variable {
+                            is_mutable: *mutable,
+                            value: val_v,
+                        };
+                        let mut borrow = rc.borrow_mut();
+                        let v = borrow.define(&name, var);
+                        self.comply_def_err(v, val.line, val.column)?;
+                    } else { // not set
+                        let val_v = self.evaluate_expression(start, &rc)?;
+                        let var = Variable {
+                            is_mutable: *mutable,
+                            value: val_v,
+                        };
+                        let mut borrow = rc.borrow_mut();
+                        let v = borrow.define(&name, var);
+                        self.comply_def_err(v, var_decl.line, var_decl.column)?;
+                    }
+                    let start_v = self.evaluate_expression(start, &rc)?;
+                    let end_v = self.evaluate_expression(end, &rc)?;
+                    match (start_v, end_v) {
+                        (Value::Int(start_v), Value::Int(end_v)) => {
+                            for _ in start_v..end_v {
+                                for stmt in body.iter() {
+                                    self.run_statement(stmt, &rc)?;
+                                }
+                                let mut borrow = rc.borrow_mut();
+                                let var = borrow.get(&name);
+                                if var.is_err() {
+                                    return Err(RuntimeError {
+                                        error_type: var.unwrap_err(),
+                                        line: start.line,
+                                        column: start.column,
+                                    })
+                                }
+                                let mut var = var.unwrap();
+                                match var.value {
+                                    Value::Int(v) => {
+                                        let new = Value::Int(v + 1);
+                                        let v = borrow.set(&name, &new);
+                                        self.comply_def_err(v, start.line, start.column)?;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        _ => {todo!("looping through strings, arrays etc")}
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    pub fn comply_def_err(&self, err: Result<&mut Environment, RuntimeErrorType>, line: usize, column: usize) -> Result<(), RuntimeError> {
+        if let Err(e) = err {
+            return Err(RuntimeError {
+                error_type: e,
+                line,
+                column,
+            })
+        }
+        Ok(())
     }
 }
