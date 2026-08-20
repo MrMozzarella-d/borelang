@@ -93,16 +93,16 @@ impl Environment {
         }
         Err(RuntimeErrorType::VariableNotFound(name.clone()))
     }
-    pub fn set(&mut self, name: &String, new: &Value) -> Result<&mut Environment, RuntimeErrorType> {
+    pub fn set(&mut self, name: &String, new: &Value, user: bool) -> Result<&mut Environment, RuntimeErrorType> {
         if let Some(var) = self.values.get_mut(name) {
-            if !var.is_mutable {
+            if !var.is_mutable && user {
                 return Err(RuntimeErrorType::AttemptToChangeConstantVar(name.clone()))
             }
             var.value = new.clone();
         } else {
             if let Some(ref enclosing) = self.enclosing {
                 let mut borrow = enclosing.borrow_mut();
-                borrow.set(name, new)?;
+                borrow.set(name, new, user)?;
             } else {
                 return Err(RuntimeErrorType::VariableNotFound(name.clone()))
             }
@@ -274,18 +274,18 @@ impl Interpreter {
                     let mut borrow = env.borrow_mut();
                     match op.token_data {
                         TokenData::Equal => {
-                            let v = borrow.set(str, &val);
+                            let v = borrow.set(str, &val, true);
                             self.comply_def_err(v, value.line, value.column)?;
                         },
                         TokenData::AddAssign => {
                             let v;
                             match (var_v, val) {
                                 (Value::Int(var), Value::Int(targ)) =>
-                                    v = borrow.set(str, &Value::Int(var + targ)),
+                                    v = borrow.set(str, &Value::Int(var + targ), true),
                                 (Value::Str(var), Value::Str(targ)) =>
-                                    v = borrow.set(str, &Value::Str(Rc::new(format!("{}{}", var, targ)))),
+                                    v = borrow.set(str, &Value::Str(Rc::new(format!("{}{}", var, targ))), true),
                                 (Value::Float(var), Value::Float(targ)) =>
-                                    v = borrow.set(str, &Value::Float(var + targ)),
+                                    v = borrow.set(str, &Value::Float(var + targ), true),
                                 _ => return Err(RuntimeError {
                                     error_type: RuntimeErrorType::CannotOperateOnType("+=".to_string(), str.clone()),
                                     line: op.line,
@@ -298,11 +298,11 @@ impl Interpreter {
                             let v;
                             match (var_v, val) {
                                 (Value::Int(var), Value::Int(targ)) =>
-                                    v = borrow.set(str, &Value::Int(var - targ)),
+                                    v = borrow.set(str, &Value::Int(var - targ), true),
                                 (Value::Float(var), Value::Float(targ)) =>
-                                    v = borrow.set(str, &Value::Float(var - targ)),
+                                    v = borrow.set(str, &Value::Float(var - targ), true),
                                 (Value::Int(var), Value::Float(targ)) =>
-                                    v = borrow.set(str, &Value::Float((var as f64) - targ)),
+                                    v = borrow.set(str, &Value::Float((var as f64) - targ), true),
                                 _ => return Err(RuntimeError {
                                     error_type: RuntimeErrorType::CannotOperateOnType("-=".to_string(), str.clone()),
                                     line: op.line,
@@ -315,11 +315,11 @@ impl Interpreter {
                             let v;
                             match (var_v, val) {
                                 (Value::Int(var), Value::Int(targ)) =>
-                                    v = borrow.set(str, &Value::Int(var / targ)),
+                                    v = borrow.set(str, &Value::Int(var / targ), true),
                                 (Value::Float(var), Value::Float(targ)) =>
-                                    v = borrow.set(str, &Value::Float(var / targ)),
+                                    v = borrow.set(str, &Value::Float(var / targ), true),
                                 (Value::Int(var), Value::Float(targ)) =>
-                                    v = borrow.set(str, &Value::Float((var as f64) / targ)),
+                                    v = borrow.set(str, &Value::Float((var as f64) / targ), true),
                                 _ => return Err(RuntimeError {
                                     error_type: RuntimeErrorType::CannotOperateOnType("/=".to_string(), str.clone()),
                                     line: op.line,
@@ -332,17 +332,17 @@ impl Interpreter {
                             let v;
                             match (var_v, val) {
                                 (Value::Int(var), Value::Int(targ)) =>
-                                    v = borrow.set(str, &Value::Int(var * targ)),
+                                    v = borrow.set(str, &Value::Int(var * targ), true),
                                 (Value::Float(var), Value::Float(targ)) =>
-                                    v = borrow.set(str, &Value::Float(var * targ)),
+                                    v = borrow.set(str, &Value::Float(var * targ), true),
                                 (Value::Int(var), Value::Float(targ)) =>
-                                    v = borrow.set(str, &Value::Float((var as f64) / targ)),
+                                    v = borrow.set(str, &Value::Float((var as f64) / targ), true),
                                 (Value::Str(var), Value::Int(targ)) => {
                                     let mut full = String::new();
                                     for _ in 0..targ {
                                         full = format!("{}{}", full, var);
                                     }
-                                    v = borrow.set(str, &Value::Str(Rc::new(full)));
+                                    v = borrow.set(str, &Value::Str(Rc::new(full)), true);
                                 }
                                 _ => return Err(RuntimeError {
                                     error_type: RuntimeErrorType::CannotOperateOnType("*=".to_string(), str.clone()),
@@ -534,7 +534,7 @@ impl Interpreter {
                                 match var.value {
                                     Value::Int(val) => {
                                         let new = Value::Int(val + 1);
-                                        let v = borrow.set(&name, &new);
+                                        let v = borrow.set(&name, &new, false);
                                         self.comply_def_err(v, start.line, start.column)?;
                                         if val + 1 == end_v {
                                             break

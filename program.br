@@ -1,4 +1,3 @@
-let i = "Hi"
-i += " "
-i *= 10
-println(i)
+for let i in 0..1_000_000 {
+    println("Hello, world!")
+}
