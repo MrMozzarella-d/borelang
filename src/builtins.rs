@@ -28,11 +28,11 @@ pub fn println(args: Vec<Value>) -> Result<Value, RuntimeErrorType> {
     let mut lock = _stdout().lock().unwrap();
     for arg in args {
         match arg {
-            Value::Bool(b) => { write!(lock, "{} ", b).unwrap(); },
-            Value::Int(i) => { write!(lock, "{} ", i).unwrap();  },
-            Value::Float(f) => { write!(lock, "{} ", f).unwrap();  },
-            Value::Str(s) => { write!(lock, "{} ", s).unwrap();  },
-            _ => return Err(RuntimeErrorType::Other("Cannot print type".to_string()))
+            Value::Bool(b) => write!(lock, "{} ", b).unwrap(),
+            Value::Int(i) => write!(lock, "{} ", i).unwrap(),
+            Value::Float(f) => write!(lock, "{} ", f).unwrap(),
+            Value::Str(s) => write!(lock, "{} ", s).unwrap(),
+            other => write!(lock, "{:?}", other).unwrap(),
         }
     }
     writeln!(lock).unwrap();
@@ -43,11 +43,11 @@ pub fn print(args: Vec<Value>) -> Result<Value, RuntimeErrorType> {
     let mut lock = _stdout().lock().unwrap();
     for arg in args {
         match arg {
-            Value::Bool(b) => { write!(lock, "{} ", b).unwrap(); },
-            Value::Int(i) => { write!(lock, "{} ", i).unwrap();  },
-            Value::Float(f) => { write!(lock, "{} ", f).unwrap();  },
-            Value::Str(s) => { write!(lock, "{} ", s).unwrap();  },
-            _ => return Err(RuntimeErrorType::Other("Cannot print type".to_string()))
+            Value::Bool(b) => write!(lock, "{} ", b).unwrap(),
+            Value::Int(i) => write!(lock, "{} ", i).unwrap(),
+            Value::Float(f) => write!(lock, "{} ", f).unwrap(),
+            Value::Str(s) => write!(lock, "{} ", s).unwrap(),
+            other => write!(lock, "{:?}", other).unwrap(),
         }
     }
     lock.flush().unwrap();

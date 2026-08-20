@@ -154,7 +154,7 @@ impl Interpreter {
         }
         Ok(())
     }
-    pub fn run_statement(&self, stmt: &Statement, env: &Rc<RefCell<Environment>>) -> Result<(), RuntimeError> {
+    pub fn run_statement(&self, stmt: &Statement, env: &Rc<RefCell<Environment>>) -> Result<Option<Value>, RuntimeError> {
         let ty = &stmt.statement_type;
         match ty {
             StatementType::VariableDeclaration { mutable, name, value } => {
@@ -184,17 +184,26 @@ impl Interpreter {
                     let v = borrow.define(&name, var);
                     self.comply_def_err(v, stmt.line, stmt.column)?;
                 }
-                Ok(())
+                Ok(None)
             },
             StatementType::ForLoop { var_decl: _, start: _, end: _, body: _ } | StatementType::If { condition: _, then_branch: _, else_branch: _ } => {
-                self.run_body(stmt, env)
+                let v = self.run_body(stmt, env);
+                v
             },
             StatementType::Expression(expr) => {
                 let v = self.evaluate_expression(&expr, env);
-                let result = v.map(|_| ());
+                let result = v.map(|_| None);
                 result
             },
-            _ => { Ok(()) }
+            StatementType::Return(rt_v) => {
+                if let Some(ret_val) = rt_v {
+                    let val = self.evaluate_expression(&ret_val, env)?;
+                    Ok(Some(val))
+                } else {
+                    Ok(Some(Value::Null))
+                }
+            },
+            _ => { Ok(None) }
         }
     }
     
@@ -286,8 +295,10 @@ impl Interpreter {
                                     v = borrow.set(str, &Value::Str(Rc::new(format!("{}{}", var, targ))), true),
                                 (Value::Float(var), Value::Float(targ)) =>
                                     v = borrow.set(str, &Value::Float(var + targ), true),
-                                _ => return Err(RuntimeError {
-                                    error_type: RuntimeErrorType::CannotOperateOnType("+=".to_string(), str.clone()),
+                                (Value::Int(var), Value::Float(targ)) =>
+                                    v = borrow.set(str, &Value::Float(var as f64 + targ), true),
+                                (var, _targ) => return Err(RuntimeError {
+                                    error_type: RuntimeErrorType::CannotOperateOnType("+=".to_string(), format!("{}(value: {:?})", str, var)),
                                     line: op.line,
                                     column: op.column,
                                 })
@@ -303,8 +314,8 @@ impl Interpreter {
                                     v = borrow.set(str, &Value::Float(var - targ), true),
                                 (Value::Int(var), Value::Float(targ)) =>
                                     v = borrow.set(str, &Value::Float((var as f64) - targ), true),
-                                _ => return Err(RuntimeError {
-                                    error_type: RuntimeErrorType::CannotOperateOnType("-=".to_string(), str.clone()),
+                                (var, _targ) => return Err(RuntimeError {
+                                    error_type: RuntimeErrorType::CannotOperateOnType("-=".to_string(), format!("{}(value: {:?})", str, var)),
                                     line: op.line,
                                     column: op.column,
                                 })
@@ -320,8 +331,8 @@ impl Interpreter {
                                     v = borrow.set(str, &Value::Float(var / targ), true),
                                 (Value::Int(var), Value::Float(targ)) =>
                                     v = borrow.set(str, &Value::Float((var as f64) / targ), true),
-                                _ => return Err(RuntimeError {
-                                    error_type: RuntimeErrorType::CannotOperateOnType("/=".to_string(), str.clone()),
+                                (var, _targ) => return Err(RuntimeError {
+                                    error_type: RuntimeErrorType::CannotOperateOnType("/=".to_string(), format!("{}(value: {:?})", str, var)),
                                     line: op.line,
                                     column: op.column,
                                 })
@@ -336,7 +347,7 @@ impl Interpreter {
                                 (Value::Float(var), Value::Float(targ)) =>
                                     v = borrow.set(str, &Value::Float(var * targ), true),
                                 (Value::Int(var), Value::Float(targ)) =>
-                                    v = borrow.set(str, &Value::Float((var as f64) / targ), true),
+                                    v = borrow.set(str, &Value::Float((var as f64) * targ), true),
                                 (Value::Str(var), Value::Int(targ)) => {
                                     let mut full = String::new();
                                     for _ in 0..targ {
@@ -344,8 +355,8 @@ impl Interpreter {
                                     }
                                     v = borrow.set(str, &Value::Str(Rc::new(full)), true);
                                 }
-                                _ => return Err(RuntimeError {
-                                    error_type: RuntimeErrorType::CannotOperateOnType("*=".to_string(), str.clone()),
+                                (var, _targ) => return Err(RuntimeError {
+                                    error_type: RuntimeErrorType::CannotOperateOnType("*=".to_string(), format!("{}(value: {:?})", str, var)),
                                     line: op.line,
                                     column: op.column,
                                 })
@@ -450,17 +461,11 @@ impl Interpreter {
                         self.comply_def_err(v, fn_stmt.line, fn_stmt.column)?;
                     }
                 }
-
                 for stmt in body {
-                    if let StatementType::Return(ref expr) = stmt.statement_type { // if return
-                        return if let Some(expr) = expr {
-                            let value = self.evaluate_expression(expr, &fn_env_rc)?;
-                            Ok(value)
-                        } else {
-                            Ok(Value::Null)
-                        }
-                    };
-                    self.run_statement(stmt, &fn_env_rc)?;
+                    let res = self.run_statement(stmt, &fn_env_rc)?;
+                    if let Some(ret) = res {
+                        return Ok(ret)
+                    }
                 };
                 Ok(Value::Null) // no return, null
             }
@@ -472,24 +477,36 @@ impl Interpreter {
         }
     }
 
-    pub fn run_body(&self, block: &Statement, prev_env: &Rc<RefCell<Environment>>) -> Result<(), RuntimeError> {
+    pub fn run_body(&self, block: &Statement, prev_env: &Rc<RefCell<Environment>>) -> Result<Option<Value>, RuntimeError> {
         let bd_env = Environment::new(Some(prev_env.clone()));
         let rc = Rc::new(RefCell::new(bd_env));
         match block.statement_type {
             StatementType::If { ref condition, ref then_branch, ref else_branch} => {
-                let hit = self.evaluate_expression(condition, &rc)?;
-                if let Value::Bool(b) = hit {
-                    if b {
+                let condition_v = self.evaluate_expression(condition, &rc)?;
+                match condition_v {
+                    Value::Bool(true) => {
                         for stmt in then_branch.iter() {
-                            self.run_statement(stmt, &rc)?;
-                        }
-                    } else {
-                        if let Some(else_branch) = else_branch {
-                            for stmt in else_branch.iter() {
-                                self.run_statement(stmt, &rc)?;
+                            let r = self.run_statement(stmt, &rc)?;
+                            if let Some(r) = r {
+                                return Ok(Some(r))
                             }
                         }
                     }
+                    Value::Bool(false) => {
+                        if let Some(else_branch) = else_branch {
+                            for stmt in else_branch.iter() {
+                                let r = self.run_statement(stmt, &rc)?;
+                                if let Some(r) = r {
+                                    return Ok(Some(r))
+                                }
+                            }
+                        }
+                    }
+                    _ => return Err(RuntimeError {
+                        error_type: RuntimeErrorType::ExpectedDiff("boolean".to_string()),
+                        line: condition.line,
+                        column: condition.column,
+                    })
                 }
             },
             StatementType::ForLoop {ref var_decl, ref start, ref end, ref body} => {
@@ -519,7 +536,10 @@ impl Interpreter {
                         (Value::Int(_start_v), Value::Int(end_v)) => {
                             loop {
                                 for stmt in body.iter() {
-                                    self.run_statement(stmt, &rc)?;
+                                    let r = self.run_statement(stmt, &rc)?;
+                                    if let Some(r) = r {
+                                        return Ok(Some(r))
+                                    }
                                 }
                                 let mut borrow = rc.borrow_mut();
                                 let var = borrow.get(&name);
@@ -543,29 +563,6 @@ impl Interpreter {
                                     _ => {}
                                 }
                             }
-                            // for _ in start_v..end_v {
-                            //     for stmt in body.iter() {
-                            //         self.run_statement(stmt, &rc)?;
-                            //     }
-                            //     let mut borrow = rc.borrow_mut();
-                            //     let var = borrow.get(&name);
-                            //     if var.is_err() {
-                            //         return Err(RuntimeError {
-                            //             error_type: var.unwrap_err(),
-                            //             line: start.line,
-                            //             column: start.column,
-                            //         })
-                            //     }
-                            //     let mut var = var.unwrap();
-                            //     match var.value {
-                            //         Value::Int(v) => {
-                            //             let new = Value::Int(v + 1);
-                            //             let v = borrow.set(&name, &new);
-                            //             self.comply_def_err(v, start.line, start.column)?;
-                            //         }
-                            //         _ => {}
-                            //     }
-                            // }
                         }
                         _ => {todo!("looping through strings, arrays etc")}
                     }
@@ -573,7 +570,7 @@ impl Interpreter {
             }
             _ => {}
         }
-        Ok(())
+        Ok(None)
     }
     pub fn comply_def_err(&self, err: Result<&mut Environment, RuntimeErrorType>, line: usize, column: usize) -> Result<(), RuntimeError> {
         if let Err(e) = err {
