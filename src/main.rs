@@ -2,7 +2,6 @@ extern crate core;
 
 use std::fs::OpenOptions;
 use std::io::Read;
-use crate::ast_printer::AstTreePrinter;
 //use crate::ast_printer::AstTreePrinter;
 use crate::lexer::Lexer;
 use crate::parser::Parser;

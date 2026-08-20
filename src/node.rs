@@ -21,6 +21,11 @@ pub enum ExpressionType {
         callee: Box<Expression>, // could also be prop access etc.
         args: Vec<Expression>,
     },
+    Assignment {
+        target: Box<Expression>,
+        op: Token,
+        value: Box<Expression>,
+    },
 }
 #[derive(Debug, Clone)]
 pub struct Expression {

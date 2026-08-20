@@ -1,12 +1,4 @@
-HelloWorld("print")
-HelloWorld("println")
-
-fn HelloWorld(msg) {
-    if msg == "println" {
-        println("Hello, world!")
-    } else {
-        if msg == "print" {
-            print("Hello, world!")
-        }
-    }
-} 
+let i = "Hi"
+i += " "
+i *= 10
+println(i)

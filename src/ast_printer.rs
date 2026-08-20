@@ -183,7 +183,8 @@ impl AstTreePrinter {
                     r.push_str(&self.p("Arguments: None"));
                 }
                 self.outdent();
-            }
+            },
+            ExpressionType::Assignment { ..} => todo!()
         }
         r
     }

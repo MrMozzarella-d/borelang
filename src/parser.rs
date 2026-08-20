@@ -122,8 +122,8 @@ impl Parser {
             match tk.token_data {
                 TokenData::Literal(name) => match name.as_str() {
                     "fn" => self.parse_function(),
-                    "let" => self.parse_var(false),
-                    "mut" => self.parse_var(true),
+                    "let" => self.parse_var(true),
+                    "const" => self.parse_var(false),
                     "for" => self.parse_for(),
                     "return" => self.parse_return(),
                     "import" => self.parse_import(),
@@ -268,14 +268,37 @@ impl Parser {
                     let line = op.line;
                     let column = op.column;
                     let right_expr = self.parse_expression(op_importance)?;
-                    left_expr = Expression {
-                        expression_type: ExpressionType::BinaryOp {
-                            left: Box::new(left_expr),
-                            op: op.clone(),
-                            right: Box::new(right_expr),
-                        },
-                        line,
-                        column,
+                    match op.token_data {
+                        TokenData::AddAssign | TokenData::DivAssign | TokenData::MulAssign | TokenData::Equal => {
+                            match &left_expr.expression_type {
+                                ExpressionType::Identifier(_) | ExpressionType::PropertyAccess { .. } => {
+                                    left_expr = Expression {
+                                        expression_type: ExpressionType::Assignment {
+                                            target: Box::new(left_expr),
+                                            op,
+                                            value: Box::new(right_expr),
+                                        },
+                                        line,
+                                        column,
+                                    }
+                                }
+                                _ => return Err(SyntaxError {
+                                    error_type: SyntaxErrorType::InvalidAssignTarget,
+                                    line, column
+                                })
+                            }
+                        }
+                        _ => {
+                            left_expr = Expression {
+                                expression_type: ExpressionType::BinaryOp {
+                                    left: Box::new(left_expr),
+                                    op: op.clone(),
+                                    right: Box::new(right_expr),
+                                },
+                                line,
+                                column,
+                            }
+                        }
                     }
                 }
             }

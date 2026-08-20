@@ -10,6 +10,7 @@ pub enum SyntaxErrorType {
     Unexpected(TokenData),
     NullVariableWithoutType(String),
     TypeInferenceFailed(),
+    InvalidAssignTarget,
 }
 #[derive(Debug)]
 pub struct SyntaxError {
@@ -42,6 +43,9 @@ impl Display for SyntaxError {
             // SyntaxErrorType::TypeError(expected, found) => {
             //     write!(f, "Syntax Error: Expected type {:?}, found {:?} at {}:{}", expected, found, self.line, self.column)
             // }
+            SyntaxErrorType::InvalidAssignTarget => {
+                write!(f, "\x1b[31mSyntax Error\x1b[0m: Invalid assignment target at {}:{}", self.line, self.column)
+            },
         }
     }
 }
@@ -61,6 +65,8 @@ pub enum RuntimeErrorType {
     ExpectedDiff(String),
     Other(String),
     FunctionShippedWithWrongAmountOfArgs(String, usize, usize),
+    UnexpectedToken(TokenData),
+    AttemptToChangeConstantVar(String),
 }
 #[derive(Debug)]
 pub struct RuntimeError {
@@ -106,6 +112,12 @@ impl Display for RuntimeError {
             }
             RuntimeErrorType::FunctionShippedWithWrongAmountOfArgs(ref s, ref expected, ref got) => {
                 write!(f, "\x1b[31mRuntime Error\x1b[0m: Function '{}' expected {} arguments, but got {} ({}:{})", s, expected, got, self.line, self.column)
+            }
+            RuntimeErrorType::UnexpectedToken(ref tkn) => {
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Unexpected token '{:?}' ({}:{})", tkn, self.line, self.column)
+            }
+            RuntimeErrorType::AttemptToChangeConstantVar(ref var) => {
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Attempt to change constant '{}' ({}:{})", var, self.line, self.column)
             }
         }
     }

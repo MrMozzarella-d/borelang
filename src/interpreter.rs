@@ -94,8 +94,11 @@ impl Environment {
         Err(RuntimeErrorType::VariableNotFound(name.clone()))
     }
     pub fn set(&mut self, name: &String, new: &Value) -> Result<&mut Environment, RuntimeErrorType> {
-        if let Some(value) = self.values.get_mut(name) {
-            value.value = new.clone();
+        if let Some(var) = self.values.get_mut(name) {
+            if !var.is_mutable {
+                return Err(RuntimeErrorType::AttemptToChangeConstantVar(name.clone()))
+            }
+            var.value = new.clone();
         } else {
             if let Some(ref enclosing) = self.enclosing {
                 let mut borrow = enclosing.borrow_mut();
@@ -257,7 +260,103 @@ impl Interpreter {
                             column: right.column,
                         })
                     }
-                    _ => todo!("Assignment operators (AddAssign, Assignment, etc.)")
+                    _ => Err(RuntimeError {
+                        error_type: RuntimeErrorType::UnexpectedToken(op.token_data.clone()),
+                        line: op.line,
+                        column: op.column,
+                    })
+                }
+            },
+            ExpressionType::Assignment { ref target, ref op,  ref value } => {
+                if let ExpressionType::Identifier(ref str) = target.expression_type {
+                    let val = self.evaluate_expression(value, env)?;
+                    let var_v = self.evaluate_expression(target, env)?;
+                    let mut borrow = env.borrow_mut();
+                    match op.token_data {
+                        TokenData::Equal => {
+                            let v = borrow.set(str, &val);
+                            self.comply_def_err(v, value.line, value.column)?;
+                        },
+                        TokenData::AddAssign => {
+                            let v;
+                            match (var_v, val) {
+                                (Value::Int(var), Value::Int(targ)) =>
+                                    v = borrow.set(str, &Value::Int(var + targ)),
+                                (Value::Str(var), Value::Str(targ)) =>
+                                    v = borrow.set(str, &Value::Str(Rc::new(format!("{}{}", var, targ)))),
+                                (Value::Float(var), Value::Float(targ)) =>
+                                    v = borrow.set(str, &Value::Float(var + targ)),
+                                _ => return Err(RuntimeError {
+                                    error_type: RuntimeErrorType::CannotOperateOnType("+=".to_string(), str.clone()),
+                                    line: op.line,
+                                    column: op.column,
+                                })
+                            }
+                            self.comply_def_err(v, value.line, value.column)?;
+                        }
+                        TokenData::SubAssign => {
+                            let v;
+                            match (var_v, val) {
+                                (Value::Int(var), Value::Int(targ)) =>
+                                    v = borrow.set(str, &Value::Int(var - targ)),
+                                (Value::Float(var), Value::Float(targ)) =>
+                                    v = borrow.set(str, &Value::Float(var - targ)),
+                                (Value::Int(var), Value::Float(targ)) =>
+                                    v = borrow.set(str, &Value::Float((var as f64) - targ)),
+                                _ => return Err(RuntimeError {
+                                    error_type: RuntimeErrorType::CannotOperateOnType("-=".to_string(), str.clone()),
+                                    line: op.line,
+                                    column: op.column,
+                                })
+                            }
+                            self.comply_def_err(v, value.line, value.column)?;
+                        }
+                        TokenData::DivAssign => {
+                            let v;
+                            match (var_v, val) {
+                                (Value::Int(var), Value::Int(targ)) =>
+                                    v = borrow.set(str, &Value::Int(var / targ)),
+                                (Value::Float(var), Value::Float(targ)) =>
+                                    v = borrow.set(str, &Value::Float(var / targ)),
+                                (Value::Int(var), Value::Float(targ)) =>
+                                    v = borrow.set(str, &Value::Float((var as f64) / targ)),
+                                _ => return Err(RuntimeError {
+                                    error_type: RuntimeErrorType::CannotOperateOnType("/=".to_string(), str.clone()),
+                                    line: op.line,
+                                    column: op.column,
+                                })
+                            }
+                            self.comply_def_err(v, value.line, value.column)?;
+                        },
+                        TokenData::MulAssign => {
+                            let v;
+                            match (var_v, val) {
+                                (Value::Int(var), Value::Int(targ)) =>
+                                    v = borrow.set(str, &Value::Int(var * targ)),
+                                (Value::Float(var), Value::Float(targ)) =>
+                                    v = borrow.set(str, &Value::Float(var * targ)),
+                                (Value::Int(var), Value::Float(targ)) =>
+                                    v = borrow.set(str, &Value::Float((var as f64) / targ)),
+                                (Value::Str(var), Value::Int(targ)) => {
+                                    let mut full = String::new();
+                                    for _ in 0..targ {
+                                        full = format!("{}{}", full, var);
+                                    }
+                                    v = borrow.set(str, &Value::Str(Rc::new(full)));
+                                }
+                                _ => return Err(RuntimeError {
+                                    error_type: RuntimeErrorType::CannotOperateOnType("*=".to_string(), str.clone()),
+                                    line: op.line,
+                                    column: op.column,
+                                })
+                            }
+                            self.comply_def_err(v, value.line, value.column)?;
+                        }
+                        _ => {}
+                    }
+                    Ok(Value::Null)
+                } else {
+                    todo!("Prop. access for assignments")
                 }
             },
             ExpressionType::Integer(i) => Ok(Value::Int(i)),
@@ -417,8 +516,8 @@ impl Interpreter {
                     let start_v = self.evaluate_expression(start, &rc)?;
                     let end_v = self.evaluate_expression(end, &rc)?;
                     match (start_v, end_v) {
-                        (Value::Int(start_v), Value::Int(end_v)) => {
-                            for _ in start_v..end_v {
+                        (Value::Int(_start_v), Value::Int(end_v)) => {
+                            loop {
                                 for stmt in body.iter() {
                                     self.run_statement(stmt, &rc)?;
                                 }
@@ -431,16 +530,42 @@ impl Interpreter {
                                         column: start.column,
                                     })
                                 }
-                                let mut var = var.unwrap();
+                                let var = var.unwrap();
                                 match var.value {
-                                    Value::Int(v) => {
-                                        let new = Value::Int(v + 1);
+                                    Value::Int(val) => {
+                                        let new = Value::Int(val + 1);
                                         let v = borrow.set(&name, &new);
                                         self.comply_def_err(v, start.line, start.column)?;
+                                        if val + 1 == end_v {
+                                            break
+                                        }
                                     }
                                     _ => {}
                                 }
                             }
+                            // for _ in start_v..end_v {
+                            //     for stmt in body.iter() {
+                            //         self.run_statement(stmt, &rc)?;
+                            //     }
+                            //     let mut borrow = rc.borrow_mut();
+                            //     let var = borrow.get(&name);
+                            //     if var.is_err() {
+                            //         return Err(RuntimeError {
+                            //             error_type: var.unwrap_err(),
+                            //             line: start.line,
+                            //             column: start.column,
+                            //         })
+                            //     }
+                            //     let mut var = var.unwrap();
+                            //     match var.value {
+                            //         Value::Int(v) => {
+                            //             let new = Value::Int(v + 1);
+                            //             let v = borrow.set(&name, &new);
+                            //             self.comply_def_err(v, start.line, start.column)?;
+                            //         }
+                            //         _ => {}
+                            //     }
+                            // }
                         }
                         _ => {todo!("looping through strings, arrays etc")}
                     }
