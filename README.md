@@ -3,20 +3,21 @@
 
 
 ## Design Goals
-* Rust-like syntax with high-level, python-like expressiveness
+* Rust-like syntax with high-level, python/GDScript-like expressiveness
 
 ## Current Features
-* Constant and Mutible Variables
-* If and For Statements
+* Constant and Mutable Variables
+* if and for Statements
 * Lightweight built-ins library (not fully)
 * Basic error handler
+* Explicit/Any types
 
 ## Code Example
 ```
 # prints "Hello, world!"
 greet("world")
 
-fn greet(who) {
+fn greet(who: str) {
   println("Hello, ", who, "!")
 }
 ```

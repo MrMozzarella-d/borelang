@@ -50,8 +50,6 @@ pub enum TokenData {
     CloseParen, 
     // ;
     Semicolon,
-    // ;;
-    // Return,
     // ,
     Comma,
     // :
@@ -60,6 +58,8 @@ pub enum TokenData {
     Dot,
     // ..
     Range,
+    // ->
+    Arrow,
     // true or false
     BooleanLiteral(bool),
     // "<string>"
@@ -76,7 +76,7 @@ pub enum TokenData {
     EOF,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub(crate) token_data: TokenData,
     pub(crate) line: usize,
@@ -96,21 +96,37 @@ impl<'a> Token {
         )
     }
 }
-
-pub static OPERATORS: phf::Map<&'static str, TokenData> = phf_map! {
+pub static SINGLES: phf::Map<&'static str, TokenData> = phf_map! {
     "+" => TokenData::Add,
-    "+=" => TokenData::AddAssign,
     "-" => TokenData::Sub,
-    "-=" => TokenData::SubAssign,
     "/" => TokenData::Div,
-    "/=" => TokenData::DivAssign,
     "*" => TokenData::Mul,
-    "*=" => TokenData::MulAssign,
     "=" => TokenData::Equal,
+    "<" => TokenData::LessThan,
+    ">" => TokenData::GreaterThan,
+    "." => TokenData::Dot,
+    ";" => TokenData::Semicolon,
+    ":" => TokenData::Colon,
+    "," => TokenData::Comma,
+    "{" => TokenData::OpenBody,
+    "}" => TokenData::CloseBody,
+    "[" => TokenData::BracketRight,
+    "]" => TokenData::BracketLeft,
+    "(" => TokenData::OpenParen,
+    ")" => TokenData::CloseParen,
+};
+
+pub static DOUBLES: phf::Map<&'static str, TokenData> = phf_map! {
+    "+=" => TokenData::AddAssign,
+    "-=" => TokenData::SubAssign,
+    "/=" => TokenData::DivAssign,
+    "*=" => TokenData::MulAssign,
     "!=" => TokenData::NotEqual,
     "==" => TokenData::Equivalent,
-    "<" => TokenData::LessThan,
     "<=" => TokenData::LessThanEqual,
-    ">" => TokenData::GreaterThan,
     ">=" => TokenData::GreaterThanEqual,
+    "??" => TokenData::Or,
+    "&&" => TokenData::And,
+    "->" => TokenData::Arrow,
+    ".." => TokenData::Range,
 };

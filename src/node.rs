@@ -1,24 +1,29 @@
-use crate::token::Token;
+use phf::phf_map;
+use crate::interpreter::{Type, TypeRule};
+use crate::token::{Token};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExpressionType {
     Identifier(String),
     Integer(i64),
     Float(f64),
     String(String),
     Boolean(bool),
-    //Object(Vec<(&'a str, Expression<'a>)>), <- i dont remember why i need this but i may in the future
     BinaryOp {
         left: Box<Expression>,
         op: Token,
         right: Box<Expression>,
+    },
+    Unary {
+        op: Token,
+        right: Box<Expression>
     },
     PropertyAccess {
         object: Box<Expression>,
         property: String,
     },
     Call {
-        callee: Box<Expression>, // could also be prop access etc.
+        callee: Box<Expression>,
         args: Vec<Expression>,
     },
     Assignment {
@@ -27,18 +32,14 @@ pub enum ExpressionType {
         value: Box<Expression>,
     },
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Expression {
     pub expression_type: ExpressionType,
     pub line: usize,
     pub column: usize,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StatementType {
-    // Assignment { ; not needed, it gets put into a binaryOp
-    //     target: Expression<'a>, // MAY be needed in the future
-    //     value: Expression<'a>,
-    // },
     If {
         condition: Expression,
         then_branch: Vec<Statement>,
@@ -46,12 +47,14 @@ pub enum StatementType {
     },
     FunctionDeclaration {
         name: String,
-        params: Vec<String>,
+        params: Vec<(String, TypeRule, Option<Expression>)>,
         body: Vec<Statement>,
+        rtn: TypeRule,
     },
     VariableDeclaration {
         mutable: bool,
         name: String,
+        type_rule: TypeRule,
         value: Option<Expression>,
     },
     ForLoop {
@@ -60,15 +63,28 @@ pub enum StatementType {
         end: Expression,
         body: Vec<Statement>,
     },
+    WhileLoop {
+        condition: Expression,
+        body: Vec<Statement>
+    },
     Import {
         mods: Vec<String>,
     },
     Return(Option<Expression>),
     Expression(Expression),
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Statement {
     pub(crate) statement_type: StatementType,
     pub(crate) line: usize,
     pub(crate) column: usize,
 }
+
+pub static PRIMITIVES: phf::Map<&'static str, Type> = phf_map! {
+    "uint" => Type::UInt,
+    "int" => Type::Int,
+    "str" => Type::Str,
+    "bool" => Type::Bool,
+    "float" => Type::Float,
+    "null" => Type::Null,
+};

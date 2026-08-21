@@ -1,12 +1,28 @@
-let result = do_stuff(1, "Hello")
-println(result)
+const BEST_NUMBER = 42
+const ITERATIONS = 5
+let iterations = 0
 
-fn do_stuff(number, string) {
-    if number == 1 {
-        return 2
-    } else {
-        if string == "Not Hello" {
-            return "Hello"
+let x = loop()
+println("x is ", x)
+x = "a string"
+println("x is now ", x)
+
+fn loop(step: int = 1) -> int {
+    for let i in 0 .. 4201 {
+        if i == BEST_NUMBER * 100 {
+            println("We reached the best number ever (times 100)! AGAIN!")
+            i = 0
+            iterations += 1
+            if iterations >= ITERATIONS {
+                println("Ok im tired")
+                return BEST_NUMBER * 100 * iterations
+            }
         }
     }
+}
+
+let j = 0
+while j < 50 {
+    println("True is true")
+    j += 1
 }

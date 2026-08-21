@@ -99,26 +99,24 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
+            let s = format!("{}{}", char, self.peek());
+            let single = format!("{}", char);
+            let mut data = None;
+            if token::DOUBLES.contains_key(s.as_str()) {
+                data = Some(token::DOUBLES.get(s.as_str()).unwrap());
+                self.advance(); 
+            } else if token::SINGLES.contains_key(single.as_str()) {
+                data = Some(token::SINGLES.get(single.as_str()).unwrap());
+            }
+            if let Some(d) = data {
+                token_vec.push(Token::new(
+                    d.clone(),
+                    self.line,
+                    self.column,
+                ))   
+            }
             match char {
                 ' ' | '\n' |  '\r' |  '\t'  => { continue; },
-                '+' | '/' | '*' | '=' | '-' | '!' | '<' | '>' => {
-                    if self.peek() == '=' {
-                        self.advance(); // consume =
-                        let op_str = &self.source[start_pos..self.current];
-                        token_vec.push(Token::new(
-                            token::OPERATORS.get(op_str).unwrap().clone(),
-                            self.line,
-                            self.column,
-                        ))
-                    } else {
-                        let op_str = &self.source[start_pos..self.current]; // same here because we dont step
-                        token_vec.push(Token::new(                         // forward once..
-                            token::OPERATORS.get(op_str).unwrap().clone(),
-                            self.line,
-                            self.column,
-                        ))
-                    }
-                },
                 '"'                 => {
                     let start_pos = self.current;
                     while self.current < self.source.len() {
@@ -136,40 +134,6 @@ impl<'a> Lexer<'a> {
                         self.line,
                         self.column,
                     ));
-                },
-                // '\'' => {
-                //     if self.peek() != '\'' {
-                //         
-                //     }
-                // }
-                '&' => {
-                    if self.peek() == '&' {
-                        token_vec.push(Token::new(TokenData::And, self.line, self.column));
-                        self.advance();
-                    }
-                },
-                '?' => {
-                    if self.peek() == '?' {
-                        token_vec.push(Token::new(TokenData::Or, self.line, self.column));
-                        self.advance();
-                    }
-                }
-                ';' =>token_vec.push(Token::new(TokenData::Semicolon, self.line, self.column)),
-                ':' => token_vec.push(Token::new(TokenData::Colon, self.line, self.column)),
-                '{' => token_vec.push(Token::new(TokenData::OpenBody, self.line, self.column, )),
-                '}' => token_vec.push(Token::new(TokenData::CloseBody, self.line, self.column, )),
-                '[' => token_vec.push(Token::new(TokenData::BracketLeft, self.line, self.column, )),
-                ']' => token_vec.push(Token::new(TokenData::BracketRight, self.line, self.column, )),
-                '(' => token_vec.push(Token::new(TokenData::OpenParen, self.line, self.column, )),
-                ')' => token_vec.push(Token::new(TokenData::CloseParen, self.line, self.column, )),
-                ',' => token_vec.push(Token::new(TokenData::Comma, self.line, self.column, )),
-                '.' => {
-                    if self.peek() == '.' {
-                        token_vec.push(Token::new(TokenData::Range, self.line, self.column));
-                        self.advance();
-                    } else {
-                        token_vec.push(Token::new(TokenData::Dot, self.line, self.column))
-                    }
                 },
                 '#' => {
                     while self.current < self.source.len() {

@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use crate::interpreter::{Value};
+use crate::interpreter::{Type, TypeRule, Value};
 use crate::token::TokenData;
 
 #[derive(Debug)]
@@ -53,7 +53,7 @@ impl Display for SyntaxError {
 pub enum RuntimeErrorType {
     VariableNotFound(String),
     VariableAlreadySet(String),
-    //TypeError(String),
+    TypeMismatch(TypeRule, Type),
     //UnknownType(String),
     TypeInferenceFailed(),
     FailedEvaluatingExpression(),
@@ -67,6 +67,8 @@ pub enum RuntimeErrorType {
     FunctionShippedWithWrongAmountOfArgs(String, usize, usize),
     UnexpectedToken(TokenData),
     AttemptToChangeConstantVar(String),
+    FnReturnsWrongType(String, TypeRule, Type),
+    AttemptToUseUnaryOnWrongType(TokenData, Type)
 }
 #[derive(Debug)]
 pub struct RuntimeError {
@@ -89,8 +91,8 @@ impl Display for RuntimeError {
             RuntimeErrorType::FailedEvaluatingExpression() => {
                 write!(f, "\x1b[31mRuntime Error\x1b[0m: Failed evaluating expression ({}:{})", self.line, self.column)
             },
-            RuntimeErrorType::CannotOperateOnType(ref op, ref str) => {
-                write!(f, "\x1b[31mRuntime Error\x1b[0m: Cannot operate with '{}' on {:?} ({}:{})", op, str, self.line, self.column)
+            RuntimeErrorType::CannotOperateOnType(ref op, ref name_1) => {
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Cannot operate with '{}' on {:?} ({}:{})", op, name_1, self.line, self.column)
             },
             RuntimeErrorType::Incompatible(ref one, ref two) => {
                 write!(f, "\x1b[31mRuntime Error\x1b[0m: Incompatible '{:?}' and '{:?}' ({}:{})", one, two, self.line, self.column)
@@ -118,6 +120,23 @@ impl Display for RuntimeError {
             }
             RuntimeErrorType::AttemptToChangeConstantVar(ref var) => {
                 write!(f, "\x1b[31mRuntime Error\x1b[0m: Attempt to change constant '{}' ({}:{})", var, self.line, self.column)
+            }
+            RuntimeErrorType::TypeMismatch(ref expected, ref found) => {
+                if let TypeRule::Explicit(t) = expected {
+                    write!(f, "\x1b[31mRuntime Error\x1b[0m: Expected type '{:?}' but found '{:?}' ({}:{})", t, found, self.line, self.column)
+                } else {
+                    write!(f, "\x1b[31mRuntime Error\x1b[0m: Expected any but somehow found '{:?}' ({}:{})", found, self.line, self.column)
+                }
+            }
+            RuntimeErrorType::FnReturnsWrongType(ref name, ref rule, ref found) => {
+                if let TypeRule::Explicit(t) = rule {
+                    write!(f, "\x1b[31mRuntime Error\x1b[0m: Function '{}' returns wrong type, expected '{:?}' but found '{:?}' ({}:{})", name, t, found, self.line, self.column)
+                } else {
+                    write!(f, "\x1b[31mRuntime Error\x1b[0m: Function '{}' returns wrong type, expected any but somehow found '{:?}' ({}:{})", name, found, self.line, self.column)
+                }
+            }
+            RuntimeErrorType::AttemptToUseUnaryOnWrongType(ref op, ref ty) => {
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Attempt to use unary '{:?}' on type '{:?}'", op, ty)
             }
         }
     }

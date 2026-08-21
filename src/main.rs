@@ -1,12 +1,11 @@
+#![feature(duration_millis_float)]
 extern crate core;
 
 use std::fs::OpenOptions;
 use std::io::Read;
-//use crate::ast_printer::AstTreePrinter;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 
-mod ast_printer;
 mod error;
 mod interpreter;
 mod lexer;
@@ -15,6 +14,7 @@ mod parser;
 mod token;
 
 mod builtins;
+mod primitive;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     //println!("hello!");
@@ -28,29 +28,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut content = String::new();
     file.read_to_string(&mut content)?;
     let time_lexer = std::time::SystemTime::now();
+
     let mut lexer = Lexer::new(&*content);
     let tokens = lexer.tokenize();
-    let dur_lex = std::time::SystemTime::now().duration_since(time_lexer)?.as_secs_f64();
-    // for token in tokens.iter() {
-    //     println!("      {:?}", token);
-    // }
+    let dur_lex = std::time::SystemTime::now().duration_since(time_lexer)?.as_millis_f64();
+
     let time_parser = std::time::SystemTime::now();
     let mut parser = Parser::new(tokens);
     let statements_res = parser.parse();
-    let dur_parse = std::time::SystemTime::now().duration_since(time_parser)?.as_secs_f64();
+    let dur_parse = std::time::SystemTime::now().duration_since(time_parser)?.as_millis_f64();
+
     let mut dur_inter = None;
     if statements_res.is_err() {
         eprintln!("{}", statements_res.unwrap_err());
     } else {
-        // let mut ast_printer = AstTreePrinter::new();
-        // ast_printer.print_program(&*statements_res.unwrap());
         let time_interpret = std::time::SystemTime::now();
         let map = statements_res.map(|v| v).unwrap();
-        let interpreter = interpreter::Interpreter::new(map);
+
+        let mut interpreter = interpreter::Interpreter::new(map);
         if let Err(e) = interpreter.run() {
             eprintln!("{}", e);
         }
-        dur_inter = Some(std::time::SystemTime::now().duration_since(time_interpret)?.as_secs_f64());
+        dur_inter = Some(std::time::SystemTime::now().duration_since(time_interpret)?.as_millis_f64());
     }
 
     let time_now = std::time::SystemTime::now();
