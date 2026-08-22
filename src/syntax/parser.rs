@@ -1,7 +1,8 @@
+use std::ptr::null;
 use crate::runtime::error::{SyntaxError, SyntaxErrorType};
 use crate::syntax::node::{Expression, ExpressionType, Statement, StatementType, PRIMITIVES};
 use crate::syntax::token::{Token, TokenData};
-use crate::{Type, TypeRule};
+use crate::{Type};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -163,7 +164,9 @@ impl Parser {
             | TokenData::NotEqual => 4,
             TokenData::Add | TokenData::Sub => 5,
             TokenData::Mul | TokenData::Div => 6,
-            TokenData::Dot | TokenData::OpenParen => 10,
+            TokenData::Dot
+            | TokenData::OpenParen
+            | TokenData::BracketLeft => 10,
             _ => 0,
         }
     }
@@ -199,6 +202,27 @@ impl Parser {
                 let inner = self.parse_expression(0)?;
                 self.expect(TokenData::CloseParen)?;
                 inner
+            },
+            TokenData::BracketLeft => {
+                let mut expr_vec = Vec::new();
+                let line = left.line; let column = left.column;
+                while self.current < self.tokens.len() {
+                    if self.peek()?.token_data == TokenData::BracketRight {
+                        break
+                    }
+                    expr_vec.push(self.parse_expression(0)?);
+                    if self.peek()?.token_data == TokenData::Comma {
+                        self.advance();
+                    } else {
+                        break
+                    }
+                };
+                self.expect(TokenData::BracketRight)?;
+                Expression {
+                    expression_type: ExpressionType::Array(expr_vec),
+                    line,
+                    column,
+                }
             }
             TokenData::Sub
             | TokenData::Not => {
@@ -259,6 +283,8 @@ impl Parser {
 
                         if self.peek()?.token_data == TokenData::Comma {
                             self.advance();
+                        } else {
+                            break
                         }
                     }
                     self.expect(TokenData::CloseParen)?;
@@ -271,6 +297,25 @@ impl Parser {
                         },
                         line, column,
                     };
+                    left_expr = expr;
+                }
+                TokenData::BracketLeft => {
+                    let op_importance = self.get_importance(next);
+                    if op_importance <= min_importance {
+                        break;
+                    }
+                    let s = self.advance();
+                    let line = s.line; let column = s.column;
+                    let expr = self.parse_expression(0)?;
+                    let expr = Expression {
+                        expression_type: ExpressionType::ArrayAccess {
+                            array: Box::new(left_expr),
+                            num: Box::new(expr),
+                        },
+                        line,
+                        column,
+                    };
+                    self.expect(TokenData::BracketRight)?;
                     left_expr = expr;
                 }
                 _ => {
@@ -319,32 +364,25 @@ impl Parser {
     }
     fn parse_type(&mut self) -> Result<Type, SyntaxError> {
         let first = self.expect_literal()?;
-        let mut path = vec![first];
-        while self.peek()?.token_data == TokenData::Dot {
-              let n = self.expect_literal()?;
-            path.push(n);
-        }
-        let mut gens = Vec::new();
-        if self.peek()?.token_data == TokenData::BracketLeft {
-            while self.current < self.tokens.len() {
-                let inner = self.parse_type()?;
-                gens.push(TypeRule::Explicit(inner));
-                if self.advance().token_data == TokenData::Comma {
-                    continue
+        let mut ty: Option<Type> = None;
+        if let Some(typ) = PRIMITIVES.get(&first) {
+            ty = Some(typ.clone());
+        } else {
+            match first.as_str() {
+                "array" => {
+                    self.expect(TokenData::BracketLeft)?;
+                    if let TokenData::Literal(ref s) = self.peek()?.token_data {
+                        let arr_ty = self.parse_type()?;
+                        ty = Some(Type::Array(Box::new(arr_ty)));
+                    } else {
+                        ty = Some(Type::Array(Box::new(Type::Any)));
+                    }
+                    self.expect(TokenData::BracketRight)?;
                 }
-                break
-            };
-            self.expect(TokenData::BracketRight)?;
-        }
-        if path.len() == 1 && gens.is_empty() {
-            if let Some(ty) = PRIMITIVES.get(path[0].as_str()) {
-                return Ok(ty.clone());
+                other=> ty = Some(Type::Unresolved(other.to_string())),
             }
-        };
-        Ok(Type::Unresolved {
-            path,
-            gens,
-        })
+        }
+        Ok(ty.unwrap())
     }
     fn parse_function(&mut self) -> Result<Statement, SyntaxError> {
         let start = self.advance(); // consume proc, to name
@@ -364,23 +402,22 @@ impl Parser {
                 if self.peek()?.token_data == TokenData::Equal { // check if default
                     self.advance();
                     let expr = self.parse_expression(0)?;
-                    params.push((param, TypeRule::Explicit(ty), Some(expr)));
+                    params.push((param, ty, Some(expr)));
                 } else {
-                    params.push((param, TypeRule::Explicit(ty), None))
+                    params.push((param, ty, None))
                 }
             } else {
-                params.push((param, TypeRule::Any, None));
+                params.push((param, Type::Any, None));
             }
             if self.peek()?.token_data == TokenData::Comma {
                 self.advance();
             }
         }
         self.expect(TokenData::CloseParen)?;
-        let mut rtn = TypeRule::Any;
+        let mut rtn = Type::Any;
         if self.peek()?.token_data == TokenData::Arrow {
             self.advance();
-            let ty = self.parse_type()?;
-            rtn = TypeRule::Explicit(ty);
+            rtn = self.parse_type()?;;
         }
         self.expect(TokenData::OpenBody)?;
         let mut body = Vec::new();
@@ -437,11 +474,10 @@ impl Parser {
         let line = start.line;
         let column = start.column;
         let name = self.expect_literal()?;
-        let mut type_rule = TypeRule::Any;
+        let mut ty = Type::Any;
         if self.peek()?.token_data == TokenData::Colon {
             self.expect(TokenData::Colon)?; // consume colon
-            let ty = self.parse_type()?;
-            type_rule = TypeRule::Explicit(ty);
+            ty = self.parse_type()?;
         }
         if self.peek()?.token_data == TokenData::Equal {
             self.expect(TokenData::Equal)?; // consume equal
@@ -449,7 +485,7 @@ impl Parser {
             let stmt = StatementType::VariableDeclaration {
                 name,
                 mutable,
-                type_rule,
+                ty,
                 value: Some(expr),
             };
             Ok(Statement {
@@ -461,7 +497,7 @@ impl Parser {
             let stmt = StatementType::VariableDeclaration {
                 name,
                 mutable,
-                type_rule,
+                ty,
                 value: None,
             };
             Ok(Statement {

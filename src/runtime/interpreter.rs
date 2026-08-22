@@ -2,7 +2,9 @@ use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::env::{var};
+use std::fmt::{write, Display, Formatter};
 use std::fs::create_dir_all;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::rc::Rc;
 use libloading::{Library, Symbol};
@@ -22,7 +24,7 @@ pub enum Value {
     Float(f64),
     Str(Rc<String>),
     Bool(bool),
-    Array(Rc<RefCell<(Vec<Value>, TypeRule)>>),
+    Array(Rc<RefCell<Vec<(Value, Type)>>>),
     Object {
         name: String,
         fields: Rc<RefCell<HashMap<String, Value>>>,
@@ -30,8 +32,8 @@ pub enum Value {
     BoreFunction(Rc<Statement>),
     RustFunction {
         func: fn(args: Vec<Value>) -> Value,
-        params: Vec<TypeRule>,
-        ret_type: TypeRule,
+        params: Vec<Type>,
+        ret_type: Type,
     },
     BoundMethod {
         this: Box<Value>,
@@ -42,39 +44,41 @@ pub enum Value {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
+    Any,
     UInt,
     Int,
     Float,
     Str,
     Bool,
     Null,
-    Array,
+    Array(Box<Type>),
     Class(String),
     Function {
-        params: Vec<TypeRule>,
-        returns: Box<TypeRule>,
+        params: Vec<Type>,
+        returns: Box<Type>,
     },
-    Unresolved {
-        path: Vec<String>,
-        gens: Vec<TypeRule>,
-    },
-}
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum TypeRule {
-    Explicit(Type),
     OneOf(Vec<Type>),
-    Any,
+    Unresolved(String),
 }
-impl TypeRule {
+impl Type {
     pub fn accepts(&self, value: &Value) -> bool {
-        if self == &TypeRule::Explicit(Type::UInt) && let Value::Int(num) = value {
+        if self == &Type::UInt && let Value::Int(num) = value {
             return *num >= 0;
         }
 
-        match self {
-            TypeRule::Any => true,
-            TypeRule::OneOf(v) => v.contains(&value.to_type()),
-            TypeRule::Explicit(e) => *e == value.to_type(),
+        match (self, value.to_type()) {
+            (Type::Any, _) => true,
+            (Type::OneOf(v), other) => v.contains(&other),
+            (Type::Array(a), Type::Array(b)) => a.accepts_t(&b),
+            (a, b) => a == &b,
+        }
+    }
+    pub fn accepts_t(&self, ty: &Type) -> bool {
+        match (self, ty) {
+            (Type::Any, _) => true,
+            (Type::OneOf(v), other) => v.contains(&other),
+            (Type::Array(a), Type::Array(b)) => a.accepts_t(&b),
+            (a, b) => a == b,
         }
     }
 }
@@ -87,7 +91,15 @@ impl Value {
             Value::Str(_) => Type::Str,
             Value::Bool(_) => Type::Bool,
             Value::Null => Type::Null,
-            Value::Array(_) => Type::Array,
+            Value::Array(rc) => {
+                let borrow = rc.borrow();
+                if borrow.is_empty() {
+                    Type::Array(Box::new(Type::Any))
+                } else {
+                    let ty = &borrow.get(0).unwrap().1;
+                    Type::Array(Box::new(ty.clone()))
+                }
+            },
             Value::Object { name, .. } => Type::Class(name.clone()),
             Value::BoreFunction(stmt) => {
                 match stmt.statement_type {
@@ -103,7 +115,7 @@ impl Value {
                     },
                     _ => Type::Function {
                         params: Vec::new(),
-                        returns: Box::new(TypeRule::Any),
+                        returns: Box::new(Type::Any),
                     }
                 }
             }
@@ -133,13 +145,13 @@ impl Value {
                             },
                             _ => Type::Function {
                                 params: Vec::new(),
-                                returns: Box::new(TypeRule::Any),
+                                returns: Box::new(Type::Any),
                             }
                         }
                     },
                     _ => Type::Function {
                         params: Vec::new(),
-                        returns: Box::new(TypeRule::Any),
+                        returns: Box::new(Type::Any),
                     }
                 }
             }
@@ -151,7 +163,7 @@ impl Value {
             }
         }
     }
-    pub fn matches(&self, expected: &TypeRule, line: usize, column: usize) -> Result<(), RuntimeError> {
+    pub fn matches(&self, expected: &Type, line: usize, column: usize) -> Result<(), RuntimeError> {
         if expected.accepts(self) {
             Ok(())
         } else {
@@ -166,10 +178,37 @@ impl Value {
         }
     }
 }
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Int(num) => write!(f, "{}", num),
+            Value::UInt(num) => write!(f, "{}", num),
+            Value::Float(num) => write!(f, "{}", num),
+            Value::Str(str) => write!(f, "{}", str),
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Array(s) => {
+                write!(f, "[{}]",
+                       s.borrow()
+                           .iter()
+                           .map(|x| {
+                               let v = &x.0;
+                               return if let Value::Str(s) = v {
+                                   format!("\"{}\"", s)
+                               } else {
+                                   v.to_string()
+                               }
+                           } )
+                           .collect::<Vec<_>>()
+                           .join(", "))
+            },
+            o => write!(f, "{:?}", o),
+        }
+    }
+}
 #[derive(Clone, Debug)]
 pub struct Variable {
     pub is_mutable: bool,
-    pub type_rule: TypeRule,
+    pub ty: Type,
     pub value: Value,
 }
 #[derive(Clone, Debug)]
@@ -209,8 +248,8 @@ impl Environment {
             if !var.is_mutable && user {
                 return Err(RuntimeErrorType::AttemptToChangeConstantVar(name.clone()))
             }
-            if var.type_rule != TypeRule::Any && var.type_rule != TypeRule::Explicit(new.to_type()) {
-                return Err(RuntimeErrorType::TypeMismatch(var.type_rule.clone(), new.to_type().clone()))
+            if var.ty != Type::Any && var.ty != new.to_type() {
+                return Err(RuntimeErrorType::TypeMismatch(var.ty.clone(), new.to_type().clone()))
             }
             var.value = new.clone();
         } else {
@@ -285,7 +324,7 @@ impl Interpreter {
                 let mut b = env.borrow_mut();
                 b.define(name, Variable {
                     is_mutable: false,
-                    type_rule: TypeRule::Explicit(Type::Class(name.clone())),
+                    ty: Type::Class(name.clone()),
                     value: Value::Object { fields: fields.clone(), name: name.clone() },
                 })?;
             }
@@ -301,7 +340,7 @@ impl Interpreter {
             for (name, value) in fields.borrow().iter() {
                 let var = Variable {
                     is_mutable: false,
-                    type_rule: TypeRule::Any,
+                    ty: Type::Any,
                     value: value.clone(),
                 };
                 let v = global_env.define(name, var);
@@ -318,10 +357,10 @@ impl Interpreter {
                 }
                 let var = Variable {
                     is_mutable: false,
-                    type_rule: TypeRule::Explicit(Type::Function {
+                    ty: Type::Function {
                         params: param_rules,
                         returns: Box::new(rtn.clone()),
-                    }),
+                    },
                     value: func_v,
                 };
                 let v = global_env.define(name, var);
@@ -343,7 +382,7 @@ impl Interpreter {
     pub fn run_statement(&mut self, stmt: &Statement, env: &Rc<RefCell<Environment>>) -> Result<Option<Value>, RuntimeError> {
         let ty = &stmt.statement_type;
         match ty {
-            StatementType::VariableDeclaration { mutable, name, type_rule, value } => {
+            StatementType::VariableDeclaration { mutable, name, ty, value } => {
                 let name = name.to_string();
                 if let Ok(_) = env.borrow().get(&name) {
                     return Err(RuntimeError {
@@ -354,16 +393,16 @@ impl Interpreter {
                 }
                 if let Some(value) = value.clone() { // w/ value
                     let runtime = self.evaluate_expression(&value, env)?;
-                    if !type_rule.accepts(&runtime) {
+                    if !ty.accepts(&runtime) {
                         return Err(RuntimeError {
-                            error_type: RuntimeErrorType::TypeMismatch(type_rule.clone(), runtime.to_type()),
+                            error_type: RuntimeErrorType::TypeMismatch(ty.clone(), runtime.to_type()),
                             line: stmt.line,
                             column: stmt.column,
                         })
                     }
                     let var = Variable {
                         is_mutable: *mutable,
-                        type_rule: type_rule.clone(),
+                        ty: ty.clone(),
                         value: runtime,
                     };
                     let mut borrow = env.borrow_mut();
@@ -372,7 +411,7 @@ impl Interpreter {
                 } else { // none
                     let var = Variable {
                         is_mutable: *mutable,
-                        type_rule: type_rule.clone(),
+                        ty: ty.clone(),
                         value: Value::Null,
                     };
                     let mut borrow = env.borrow_mut();
@@ -649,6 +688,63 @@ impl Interpreter {
             ExpressionType::Float(f) => Ok(Value::Float(f)),
             ExpressionType::Boolean(b) => Ok(Value::Bool(b)),
             ExpressionType::String(ref s) => Ok(Value::Str(Rc::new(s.clone()))),
+            ExpressionType::Array(ref vec) => {
+                let mut values = Vec::new();
+                for v in vec {
+                    let val = self.evaluate_expression(v, env)?;
+                    let ty = val.to_type();
+                    values.push((val, ty))
+               };
+                Ok(Value::Array(Rc::new(RefCell::new(values))))
+            }
+            ExpressionType::ArrayAccess { ref array, ref num } => {
+                let arr_v = self.evaluate_expression(&*array, env)?;
+                let num_v = self.evaluate_expression(&*num, env)?;
+                if let Value::Array(vec) = arr_v {
+                    if let Value::UInt(v) = num_v {
+                        let borrow = vec.borrow();
+                        if let Some((res, _ty)) = borrow.get(v as usize) {
+                            Ok(res.clone())
+                        } else {
+                            Err(RuntimeError {
+                                error_type: RuntimeErrorType::ArrIndexOutOfBounds(v as i64, vec.borrow().len()),
+                                line: num.line,
+                                column: num.column,
+                            })
+                        }
+                    } else if let Value::Int(v) = num_v {
+                        if v < 0 {
+                            Err(RuntimeError {
+                                error_type: RuntimeErrorType::ArrIndexOutOfBounds(v, vec.borrow().len()),
+                                line: num.line,
+                                column: num.column,
+                            })
+                        } else {
+                            if let Some((res, _ty)) = vec.borrow().get(v as usize) {
+                                Ok(res.clone())
+                            } else {
+                                Err(RuntimeError {
+                                    error_type: RuntimeErrorType::ArrIndexOutOfBounds(v, vec.borrow().len()),
+                                    line: num.line,
+                                    column: num.column,
+                                })
+                            }
+                        }
+                    } else {
+                        Err(RuntimeError {
+                            error_type: RuntimeErrorType::AttemptToIndexArrWithNonInteger(num_v),
+                            line: num.line,
+                            column: num.column,
+                        })
+                    }
+                } else {
+                    Err(RuntimeError {
+                        error_type: RuntimeErrorType::FailedEvaluatingExpression(expression.clone()),
+                        line: array.line,
+                        column: array.column
+                    })
+                }
+            },
             ExpressionType::Identifier(ref name) => {
                 if let Ok(var) = env.borrow().get(&name) {
                     Ok(var.value)
@@ -749,17 +845,17 @@ impl Interpreter {
                     })
                 }
                 for i in 0..args.iter().count() {
-                    let param = params.get(i).unwrap();
+                    let (name, ty, expr) = params.get(i).unwrap();
                     if let Some(arg) = args.get(i) {
                         let mut borrow = fn_env_rc.borrow_mut();
-                        let v = borrow.define(&param.0, Variable {is_mutable: true, type_rule: param.1.clone(), value: arg.clone()});
+                        let v = borrow.define(name, Variable {is_mutable: true, ty: ty.clone(), value: arg.clone()});
                         self.comply_def_err(v, fn_stmt.line, fn_stmt.column)?;
                     } else {
-                        if let Some(ref default) = param.2 {
+                        if let Some(default) = expr {
                             let val = self.evaluate_expression(default, &fn_env_rc)?;
                             let mut borrow = fn_env_rc.borrow_mut();
                             let v =
-                                borrow.define(&param.0, Variable {is_mutable: true, type_rule: param.1.clone(), value: val.clone()});
+                                borrow.define(name, Variable {is_mutable: true, ty: ty.clone(), value: val.clone()});
                             self.comply_def_err(v, fn_stmt.line, fn_stmt.column)?;
                         } else {
                             return Err(RuntimeError {
@@ -842,12 +938,12 @@ impl Interpreter {
                 }
             }
             StatementType::ForLoop {ref var_decl, ref start, ref end, ref body} => {
-                if let StatementType::VariableDeclaration { ref mutable, ref name, ref type_rule, ref value } = var_decl.statement_type {
+                if let StatementType::VariableDeclaration { ref mutable, ref name, ref ty, ref value } = var_decl.statement_type {
                     if let Some(val) = value { // set val
                         let val_v = self.evaluate_expression(&val, &rc)?;
                         let var = Variable {
                             is_mutable: *mutable,
-                            type_rule: type_rule.clone(),
+                            ty: ty.clone(),
                             value: val_v,
                         };
                         let mut borrow = rc.borrow_mut();
@@ -857,7 +953,7 @@ impl Interpreter {
                         let val_v = self.evaluate_expression(start, &rc)?;
                         let var = Variable {
                             is_mutable: *mutable,
-                            type_rule: type_rule.clone(),
+                            ty: ty.clone(),
                             value: val_v,
                         };
                         let mut borrow = rc.borrow_mut();

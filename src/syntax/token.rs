@@ -113,8 +113,8 @@ pub static SINGLES: phf::Map<&'static str, TokenData> = phf_map! {
     "," => TokenData::Comma,
     "{" => TokenData::OpenBody,
     "}" => TokenData::CloseBody,
-    "[" => TokenData::BracketRight,
-    "]" => TokenData::BracketLeft,
+    "[" => TokenData::BracketLeft,
+    "]" => TokenData::BracketRight,
     "(" => TokenData::OpenParen,
     ")" => TokenData::CloseParen,
 };

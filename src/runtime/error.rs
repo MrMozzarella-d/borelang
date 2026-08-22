@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use crate::{Type, TypeRule, Value};
+use crate::{Type, Value};
 use crate::syntax::node::Expression;
 use crate::syntax::token::TokenData;
 
@@ -54,7 +54,7 @@ impl Display for SyntaxError {
 pub enum RuntimeErrorType {
     VariableNotFound(String),
     VariableAlreadySet(String),
-    TypeMismatch(TypeRule, Type),
+    TypeMismatch(Type, Type),
     //UnknownType(String),
     TypeInferenceFailed(),
     FailedEvaluatingExpression(Expression),
@@ -68,11 +68,13 @@ pub enum RuntimeErrorType {
     FunctionShippedWithWrongAmountOfArgs(String, usize, usize),
     UnexpectedToken(TokenData),
     AttemptToChangeConstantVar(String),
-    FnReturnsWrongType(String, TypeRule, Type),
+    FnReturnsWrongType(String, Type, Type),
     AttemptToUseUnaryOnWrongType(TokenData, Type),
     ModuleAlreadyImported(String),
     ModuleNotFound(String),
     ImportedModuleDoesntHaveInitFunction(String),
+    ArrIndexOutOfBounds(i64, usize),
+    AttemptToIndexArrWithNonInteger(Value)
 }
 #[derive(Debug)]
 pub struct RuntimeError {
@@ -126,17 +128,17 @@ impl Display for RuntimeError {
                 write!(f, "\x1b[31mRuntime Error\x1b[0m: Attempt to change constant '{}' ({}:{})", var, self.line, self.column)
             }
             RuntimeErrorType::TypeMismatch(ref expected, ref found) => {
-                if let TypeRule::Explicit(t) = expected {
-                    write!(f, "\x1b[31mRuntime Error\x1b[0m: Expected type '{:?}' but found '{:?}' ({}:{})", t, found, self.line, self.column)
+                if expected != &Type::Any {
+                    write!(f, "\x1b[31mRuntime Error\x1b[0m: Expected type '{:?}' but found '{:?}' ({}:{})", expected, found, self.line, self.column)
                 } else {
                     write!(f, "\x1b[31mRuntime Error\x1b[0m: Expected any but somehow found '{:?}' ({}:{})", found, self.line, self.column)
                 }
             }
-            RuntimeErrorType::FnReturnsWrongType(ref name, ref rule, ref found) => {
-                if let TypeRule::Explicit(t) = rule {
-                    write!(f, "\x1b[31mRuntime Error\x1b[0m: Function '{}' returns wrong type, expected '{:?}' but found '{:?}' ({}:{})", name, t, found, self.line, self.column)
-                } else {
+            RuntimeErrorType::FnReturnsWrongType(ref name, ref ty, ref found) => {
+                if ty == &Type::Any {
                     write!(f, "\x1b[31mRuntime Error\x1b[0m: Function '{}' returns wrong type, expected any but somehow found '{:?}' ({}:{})", name, found, self.line, self.column)
+                } else {
+                    write!(f, "\x1b[31mRuntime Error\x1b[0m: Function '{}' returns wrong type, expected '{:?}' but found '{:?}' ({}:{})", name, ty, found, self.line, self.column)
                 }
             }
             RuntimeErrorType::AttemptToUseUnaryOnWrongType(ref op, ref ty) => {
@@ -150,6 +152,12 @@ impl Display for RuntimeError {
             }
             RuntimeErrorType::ImportedModuleDoesntHaveInitFunction(ref name) => {
                 write!(f, "\x1b[31mRuntime Error\x1b[0m: Couldn't find an init function for module '{}' ({}:{})", name, self.line, self.column)
+            }
+            RuntimeErrorType::ArrIndexOutOfBounds(ref i, ref size) => {
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Array index '{}' out of bounds (array has size of {}) ({}:{})", i, size, self.line, self.column)
+            }
+            RuntimeErrorType::AttemptToIndexArrWithNonInteger(ref nonint) => {
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Attempt to index array with non-integer value '{}' ({}:{})", nonint, self.line, self.column)
             }
         }
     }

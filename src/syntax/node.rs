@@ -1,5 +1,5 @@
 use phf::phf_map;
-use crate::runtime::interpreter::{Type, TypeRule};
+use crate::runtime::interpreter::{Type};
 use crate::syntax::token::{Token};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -9,6 +9,7 @@ pub enum ExpressionType {
     Float(f64),
     String(String),
     Boolean(bool),
+    Array(Vec<Expression>),
     BinaryOp {
         left: Box<Expression>,
         op: Token,
@@ -31,6 +32,10 @@ pub enum ExpressionType {
         op: Token,
         value: Box<Expression>,
     },
+    ArrayAccess {
+        array: Box<Expression>,
+        num: Box<Expression>,
+    }
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expression {
@@ -47,14 +52,14 @@ pub enum StatementType {
     },
     FunctionDeclaration {
         name: String,
-        params: Vec<(String, TypeRule, Option<Expression>)>,
+        params: Vec<(String, Type, Option<Expression>)>,
         body: Vec<Statement>,
-        rtn: TypeRule,
+        rtn: Type,
     },
     VariableDeclaration {
         mutable: bool,
         name: String,
-        type_rule: TypeRule,
+        ty: Type,
         value: Option<Expression>,
     },
     ForLoop {
@@ -87,4 +92,5 @@ pub static PRIMITIVES: phf::Map<&'static str, Type> = phf_map! {
     "bool" => Type::Bool,
     "float" => Type::Float,
     "null" => Type::Null,
+    "any" => Type::Any,
 };

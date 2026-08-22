@@ -5,19 +5,19 @@ use std::rc::Rc;
 use std::sync::Mutex;
 
 use crate::Module;
-use crate::runtime::interpreter::{TypeRule, Value, Type};
+use crate::runtime::interpreter::{Value, Type};
 
 pub fn init_module() -> Module {
     let mut fields: HashMap<String, Value> = HashMap::new();
     fields.insert("println".to_string(), Value::RustFunction {
         func: _println,
-        params: vec![TypeRule::Any],
-        ret_type: TypeRule::Explicit(Type::Null)
+        params: vec![Type::Any],
+        ret_type: Type::Null
     });
     fields.insert("print".to_string(), Value::RustFunction {
         func: _print,
-        params: vec![TypeRule::Any],
-        ret_type: TypeRule::Explicit(Type::Null)
+        params: vec![Type::Any],
+        ret_type: Type::Null
     });
     fields.insert("null".to_string(), Value::Null);
     fields.insert("true".to_string(), Value::Bool(true));
@@ -34,13 +34,7 @@ pub fn init_module() -> Module {
 pub fn _println(args: Vec<Value>) -> Value {
     let mut lock = __stdout().lock().unwrap();
     for arg in args {
-        match arg {
-            Value::Bool(b) => write!(lock, "{}", b).unwrap(),
-            Value::Int(i) => write!(lock, "{}", i).unwrap(),
-            Value::Float(f) => write!(lock, "{}", f).unwrap(),
-            Value::Str(s) => write!(lock, "{}", s).unwrap(),
-            other => write!(lock, "{:?}", other).unwrap(),
-        }
+        write!(lock, "{}", arg).unwrap();
     }
     writeln!(lock).unwrap();
     lock.flush().unwrap();

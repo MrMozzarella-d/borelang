@@ -1,4 +1,4 @@
-use borelang::{Type, TypeRule, Value, Module};
+use borelang::{Type, Value, Module};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn init_module() -> Module {
@@ -6,29 +6,29 @@ pub extern "C" fn init_module() -> Module {
     module.add_fn(
         "abs", _abs,
         vec![
-            TypeRule::OneOf(vec![Type::Int, Type::Float])
+            Type::OneOf(vec![Type::Int, Type::Float])
         ],
-        TypeRule::OneOf(vec![Type::Int, Type::Float]),
+        Type::OneOf(vec![Type::Int, Type::Float]),
     );
     module.add_fn(
         "floor", _floor,
-        vec![TypeRule::Explicit(Type::Float)],
-        TypeRule::Explicit(Type::Float),
+        vec![Type::Float],
+        Type::Float,
     );
     module.add_fn(
         "ceil", _ceil,
-        vec![TypeRule::Explicit(Type::Float)],
-        TypeRule::Explicit(Type::Float),
+        vec![Type::Float],
+        Type::Float,
     );
     module.add_fn(
         "sin", _sin,
-        vec![TypeRule::Explicit(Type::Float)],
-        TypeRule::Explicit(Type::Float),
+        vec![Type::Float],
+        Type::Float,
     );
     module.add_fn(
         "cos", _cos,
-        vec![TypeRule::Explicit(Type::Float)],
-        TypeRule::Explicit(Type::Float),
+        vec![Type::Float],
+        Type::Float,
     );
 
     module.add_primitive(
