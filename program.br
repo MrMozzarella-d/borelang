@@ -28,11 +28,20 @@ while j < 50 {
     println("True is true")
     j += 1
 }
-println("Pi is ", math.PI, " and abs of -2 is ", math.i_abs(-2))
+println("Pi is ", math.PI, " and abs of -2 is ", math.abs(-2))
 const PIE = math.PI
 if PIE != 3.5 && PIE != 3.4 {
     println("Pi is not 3.5 or 3.4")
 }
 if PIE == 3.5 ?? 1 == 1 {
     println("Hmmm.. I dont know is pi 3.5 or 1 one..?")
+    let is_it_pi = PIE == 3.5
+    let is_it_1 = 1 == 1
+    println("Is it pi? ", is_it_pi)
+    if !is_it_pi {
+        println("No.. Maybe its 1? ", is_it_1)
+    }
 }
+let val1: int = math.abs(-512)
+let val2: float = math.abs(-83.19)
+println("Abs of -512 is ", val1, ", abs of -83.19 is ", val2)

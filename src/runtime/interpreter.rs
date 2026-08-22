@@ -62,6 +62,7 @@ pub enum Type {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeRule {
     Explicit(Type),
+    OneOf(Vec<Type>),
     Any,
 }
 impl TypeRule {
@@ -72,7 +73,8 @@ impl TypeRule {
 
         match self {
             TypeRule::Any => true,
-            TypeRule::Explicit(e) => *e == value.to_type()
+            TypeRule::OneOf(v) => v.contains(&value.to_type()),
+            TypeRule::Explicit(e) => *e == value.to_type(),
         }
     }
 }
