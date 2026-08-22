@@ -7,10 +7,11 @@
 
 ## Current Features
 * Constant and Mutable Variables
-* if and for Statements
+* if, for and while statements
 * Lightweight built-ins library (not fully)
 * Basic error handler
 * Explicit/Any types
+* Imports from rust -> bore
 
 ## Code Example
 ```
