@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 use crate::{Type, TypeRule, Value};
+use crate::syntax::node::Expression;
 use crate::syntax::token::TokenData;
 
 #[derive(Debug)]
@@ -56,7 +57,7 @@ pub enum RuntimeErrorType {
     TypeMismatch(TypeRule, Type),
     //UnknownType(String),
     TypeInferenceFailed(),
-    FailedEvaluatingExpression(),
+    FailedEvaluatingExpression(Expression),
     CannotOperateOnType(String, String),
     Incompatible(Value, Value),
     CantAssignVariableToNull(),
@@ -91,8 +92,8 @@ impl Display for RuntimeError {
             RuntimeErrorType::TypeInferenceFailed() => {
                 write!(f, "\x1b[31mRuntime Error\x1b[0m: Type inference failed ({}:{})", self.line, self.column)
             },
-            RuntimeErrorType::FailedEvaluatingExpression() => {
-                write!(f, "\x1b[31mRuntime Error\x1b[0m: Failed evaluating expression ({}:{})", self.line, self.column)
+            RuntimeErrorType::FailedEvaluatingExpression(ref e) => {
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Failed evaluating expression {:?} ({}:{})", e.expression_type, self.line, self.column)
             },
             RuntimeErrorType::CannotOperateOnType(ref op, ref name_1) => {
                 write!(f, "\x1b[31mRuntime Error\x1b[0m: Cannot operate with '{}' on {:?} ({}:{})", op, name_1, self.line, self.column)

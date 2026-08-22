@@ -36,6 +36,8 @@ pub enum TokenData {
     Or,
     // &&
     And,
+    // !
+    Not,
     // {
     OpenBody,
     // }
@@ -105,6 +107,7 @@ pub static SINGLES: phf::Map<&'static str, TokenData> = phf_map! {
     "<" => TokenData::LessThan,
     ">" => TokenData::GreaterThan,
     "." => TokenData::Dot,
+    "!" => TokenData::Not,
     ";" => TokenData::Semicolon,
     ":" => TokenData::Colon,
     "," => TokenData::Comma,

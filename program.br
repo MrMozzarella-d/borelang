@@ -28,4 +28,11 @@ while j < 50 {
     println("True is true")
     j += 1
 }
-println("Pi is ", math.PI, " and abs of 2 is ", math.i_abs(2))
+println("Pi is ", math.PI, " and abs of -2 is ", math.i_abs(-2))
+const PIE = math.PI
+if PIE != 3.5 && PIE != 3.4 {
+    println("Pi is not 3.5 or 3.4")
+}
+if PIE == 3.5 ?? 1 == 1 {
+    println("Hmmm.. I dont know is pi 3.5 or 1 one..?")
+}

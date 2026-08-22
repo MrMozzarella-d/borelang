@@ -1,9 +1,8 @@
 use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::env::{current_exe, var};
+use std::env::{var};
 use std::fs::create_dir_all;
-use std::mem::replace;
 use std::path::PathBuf;
 use std::rc::Rc;
 use libloading::{Library, Symbol};
@@ -266,9 +265,6 @@ impl Interpreter {
             _ = create_dir_all(&sysdir);
         }
         let sys = sysdir.join(&file_n);
-        println!("looking for {:?}", &file_n);
-        println!("std: {:?}", std);
-        println!("sys: {:?}", sys);
         let path = if std.exists() {
             std
         } else if sys.exists() {
@@ -481,7 +477,20 @@ impl Interpreter {
                             line: right.line,
                             column: right.column,
                         })
-                    }
+                    },
+                    TokenData::NotEqual => match (left_v, right_v) {
+                        (Value::Int(l), Value::Int(r)) => Ok(Value::Bool(l != r)),
+                        (Value::Float(l), Value::Float(r)) => Ok(Value::Bool(l != r)),
+                        (Value::Str(l), Value::Str(r)) => Ok(Value::Bool(l != r)),
+                        (Value::RustFunction { func: l, .. }, Value::RustFunction { func: r, .. }) =>
+                            Ok(Value::Bool(!std::ptr::fn_addr_eq(l, r))),
+                        (Value::BoreFunction(l), Value::BoreFunction(r)) => Ok(Value::Bool(!std::ptr::eq(&l, &r))),
+                        (l_val, r_val) => Err(RuntimeError {
+                            error_type: RuntimeErrorType::Incompatible(l_val, r_val),
+                            line: right.line,
+                            column: right.column,
+                        })
+                    },
                     TokenData::GreaterThanEqual =>
                         self.compare_values(left_v, right_v, |l, r| l >= r, right.line, right.column),
                     TokenData::GreaterThan =>
@@ -490,6 +499,22 @@ impl Interpreter {
                         self.compare_values(left_v, right_v, |l, r| l < r, right.line, right.column),
                     TokenData::LessThanEqual =>
                         self.compare_values(left_v, right_v, |l, r| l <= r, right.line, right.column),
+                    TokenData::And => match (left_v, right_v) {
+                        (Value::Bool(l), Value::Bool(r)) => Ok(Value::Bool(l && r)),
+                        (_l_val, _r_val) => Err(RuntimeError {
+                            error_type: RuntimeErrorType::CannotOperateOnType("non-bool".to_string(), "&&".to_string()),
+                            line: right.line,
+                            column: right.column,
+                        })
+                    },
+                    TokenData::Or => match (left_v, right_v) {
+                        (Value::Bool(l), Value::Bool(r)) => Ok(Value::Bool(l || r)),
+                        (_l_val, _r_val) => Err(RuntimeError {
+                            error_type: RuntimeErrorType::CannotOperateOnType("non-bool".to_string(), "??".to_string()),
+                            line: right.line,
+                            column: right.column,
+                        })
+                    },
                     _ => Err(RuntimeError {
                         error_type: RuntimeErrorType::UnexpectedToken(op.token_data.clone()),
                         line: op.line,
@@ -498,23 +523,30 @@ impl Interpreter {
                 }
             },
             ExpressionType::Unary { ref op, ref right } => {
+                let v = self.evaluate_expression(right, env)?;
+                let ty = v.to_type();
                 match op.token_data {
                     TokenData::Sub => {
-                        let v = self.evaluate_expression(right, env)?;
-                        let ty = v.to_type();
-                        if ty != Type::Int && ty != Type::Float {
-                            return Err(RuntimeError {
+                        match v {
+                            Value::Int(i) => Ok(Value::Int(-i)),
+                            Value::Float(f) => Ok(Value::Float(-f)),
+                            _ => Err(RuntimeError {
                                 error_type: RuntimeErrorType::AttemptToUseUnaryOnWrongType(op.clone().token_data, ty),
                                 line: op.line, column: op.column,
                             })
                         }
-                        match v {
-                            Value::Int(i) => Ok(Value::Int(-i)),
-                            Value::Float(f) => Ok(Value::Float(-f)),
-                            _ => unreachable!(),
+                    },
+                    TokenData::Not => {
+                        if let Value::Bool(old) = v {
+                            Ok(Value::Bool(!old))
+                        } else {
+                            Err(RuntimeError {
+                            error_type: RuntimeErrorType::AttemptToUseUnaryOnWrongType(op.clone().token_data, ty),
+                            line: op.line, column: op.column,
+                            })
                         }
                     },
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 }
             },
             ExpressionType::Assignment { ref target, ref op,  ref value } => {
@@ -612,6 +644,7 @@ impl Interpreter {
                 }
             },
             ExpressionType::Integer(i) => Ok(Value::Int(i)),
+            ExpressionType::Float(f) => Ok(Value::Float(f)),
             ExpressionType::Boolean(b) => Ok(Value::Bool(b)),
             ExpressionType::String(ref s) => Ok(Value::Str(Rc::new(s.clone()))),
             ExpressionType::Identifier(ref name) => {
@@ -687,17 +720,17 @@ impl Interpreter {
                         }
                     },
                     _ => Err(RuntimeError {
-                        error_type: RuntimeErrorType::FailedEvaluatingExpression(),
+                        error_type: RuntimeErrorType::FailedEvaluatingExpression(expression.clone()),
                         line: callee.line,
                         column: callee.column,
                     })
                 }
             },
-            _ => Err(RuntimeError{
-                error_type: RuntimeErrorType::FailedEvaluatingExpression(),
-                line: expression.line,
-                column: expression.column,
-            }),
+            // _ => Err(RuntimeError{
+            //     error_type: RuntimeErrorType::FailedEvaluatingExpression(expression.clone()),
+            //     line: expression.line,
+            //     column: expression.column,
+            // }),
         }
     }
 

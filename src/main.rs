@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         let time_interpret = std::time::SystemTime::now();
         let map = statements_res.map(|v| v).unwrap();
-
+        
         let mut interpreter = Interpreter::new(map);
         if let Err(e) = interpreter.run() {
             eprintln!("{}", e);
@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let time_now = std::time::SystemTime::now();
-    let dur = time_now.duration_since(time_start)?.as_secs_f64();
+    let dur = time_now.duration_since(time_start)?.as_millis_f64();
     println!();
     println!("total: {}", dur);
     println!("time lexer: {}", dur_lex);

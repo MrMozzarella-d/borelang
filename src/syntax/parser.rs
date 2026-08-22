@@ -153,13 +153,16 @@ impl Parser {
             | TokenData::SubAssign
             | TokenData::MulAssign
             | TokenData::DivAssign => 1,
+            TokenData::Or => 2,
+            TokenData::And => 3,
             TokenData::Equivalent
             | TokenData::GreaterThan
             | TokenData::GreaterThanEqual
             | TokenData::LessThan
-            | TokenData::LessThanEqual => 2,
-            TokenData::Add | TokenData::Sub => 3,
-            TokenData::Mul | TokenData::Div => 4,
+            | TokenData::LessThanEqual
+            | TokenData::NotEqual => 4,
+            TokenData::Add | TokenData::Sub => 5,
+            TokenData::Mul | TokenData::Div => 6,
             TokenData::Dot | TokenData::OpenParen => 10,
             _ => 0,
         }
@@ -197,7 +200,8 @@ impl Parser {
                 self.expect(TokenData::CloseParen)?;
                 inner
             }
-            TokenData::Sub => {
+            TokenData::Sub
+            | TokenData::Not => {
                 let clone = left.clone();
                 let right = self.parse_expression(20)?;
                 let line = right.line; let column = right.column;
@@ -279,7 +283,7 @@ impl Parser {
                     let column = op.column;
                     let right_expr = self.parse_expression(op_importance)?;
                     match op.token_data {
-                        TokenData::AddAssign | TokenData::DivAssign | TokenData::MulAssign | TokenData::Equal => {
+                        TokenData::AddAssign | TokenData::DivAssign | TokenData::MulAssign | TokenData::SubAssign | TokenData::Equal => {
                             match &left_expr.expression_type {
                                 ExpressionType::Identifier(_) | ExpressionType::PropertyAccess { .. } => {
                                     left_expr = Expression {
