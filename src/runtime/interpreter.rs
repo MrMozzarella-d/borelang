@@ -1,14 +1,20 @@
 use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
+use std::env::{current_exe, var};
+use std::fs::create_dir_all;
+use std::mem::replace;
+use std::path::PathBuf;
 use std::rc::Rc;
-
+use libloading::{Library, Symbol};
 use crate::runtime::{builtins, error};
 use error::{RuntimeError, RuntimeErrorType};
-use crate::primitive;
+use crate::{primitive, Module};
 
 use crate::syntax::node::{Statement, StatementType, ExpressionType, Expression};
 use crate::syntax::token::TokenData;
+
+type Env = Rc<RefCell<Environment>>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -168,14 +174,14 @@ pub struct Variable {
 #[derive(Clone, Debug)]
 pub struct Environment {
     vars: HashMap<String, Variable>,
-    types: HashMap<String, Type>,
-    enclosing: Option<Rc<RefCell<Environment>>>
+    //types: HashMap<String, Type>,
+    enclosing: Option<Env>
 }
 impl Environment {
-    pub fn new(enclosing: Option<Rc<RefCell<Environment>>>) -> Self {
+    pub fn new(enclosing: Option<Env>) -> Self {
         Self {
             vars: HashMap::new(),
-            types: HashMap::new(),
+            //types: HashMap::new(),
             enclosing,
         }
     }
@@ -220,12 +226,73 @@ impl Environment {
 pub struct Interpreter {
     ast: Vec<Statement>,
     vtables: HashMap<Type, HashMap<String, Value>>,
+    lib_cache: Vec<Library>
 }
 impl Interpreter {
     pub fn new(ast: Vec<Statement>) -> Self {
         Self {
             ast,
             vtables: HashMap::new(),
+            lib_cache: Vec::new(),
+        }
+    }
+    pub fn import_mod(&mut self, name: &String, env: &Env) -> Result<(), RuntimeErrorType> {
+        if let Ok(_) = env.borrow().get(name) {
+            return Err(RuntimeErrorType::VariableAlreadySet(name.clone()))
+        };
+        let file_n = if cfg!(target_os = "windows") {
+            format!("{}.dll", name)
+        } else if cfg!(target_os = "macos") {
+            format!("{}.dylib", name)
+        } else {
+            format!("{}.so", name)
+        };
+
+        let std = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("std_mods")
+            .join(&file_n);
+        let sysdir = if cfg!(target_os = "windows") {
+            let path = var("LOCALAPPDATA")
+                .unwrap_or_else(|_| {
+                    let home = var("USERPROFILE").unwrap_or_else(|_| "C:\\".to_string());
+                    format!("{}\\Appdata\\Local", home)
+                });
+            PathBuf::from(path).join("borelang").join("modules")
+        } else {
+            PathBuf::from("/usr/lib/borelang")
+        };
+        if !sysdir.exists() {
+            _ = create_dir_all(&sysdir);
+        }
+        let sys = sysdir.join(&file_n);
+        println!("looking for {:?}", &file_n);
+        println!("std: {:?}", std);
+        println!("sys: {:?}", sys);
+        let path = if std.exists() {
+            std
+        } else if sys.exists() {
+            sys
+        } else {
+            return Err(RuntimeErrorType::ModuleNotFound(name.clone()));
+        };
+
+        unsafe {
+            let lib = Library::new(&path)
+                .map_err(|_| RuntimeErrorType::ModuleNotFound(name.clone()))?;
+            let search_module: Symbol<extern "C" fn() -> Module> = lib.get(b"init_module")
+                .map_err(|_| RuntimeErrorType::ImportedModuleDoesntHaveInitFunction(name.clone()))?;
+            let module: Module = search_module();
+            if let Value::Object { fields, name } = &module.obj {
+                let mut b = env.borrow_mut();
+                b.define(name, Variable {
+                    is_mutable: false,
+                    type_rule: TypeRule::Explicit(Type::Class(name.clone())),
+                    value: Value::Object { fields: fields.clone(), name: name.clone() },
+                })?;
+            }
+            self.lib_cache.push(lib);
+            Ok(())
         }
     }
     pub fn run(&mut self) -> Result<(), RuntimeError> {
@@ -267,14 +334,15 @@ impl Interpreter {
         primitive::register(&mut self.vtables);
 
         let rc = Rc::new(RefCell::new(global_env));
-        for stmt in self.ast.iter() {
-            if let Err(e) = self.run_statement(stmt, &rc) {
+        for i in 0..self.ast.len() {
+            let stmt = self.ast[i].clone();
+            if let Err(e) = self.run_statement(&stmt, &rc) {
                 return Err(e);
             }
         }
         Ok(())
     }
-    pub fn run_statement(&self, stmt: &Statement, env: &Rc<RefCell<Environment>>) -> Result<Option<Value>, RuntimeError> {
+    pub fn run_statement(&mut self, stmt: &Statement, env: &Rc<RefCell<Environment>>) -> Result<Option<Value>, RuntimeError> {
         let ty = &stmt.statement_type;
         match ty {
             StatementType::VariableDeclaration { mutable, name, type_rule, value } => {
@@ -334,11 +402,24 @@ impl Interpreter {
                     Ok(Some(Value::Null))
                 }
             },
+            StatementType::Import { mods } => {
+                for module in mods {
+                    let v = self.import_mod(module, env);
+                    if let Err(error_type) = v {
+                        return Err(RuntimeError {
+                            error_type,
+                            line: stmt.line,
+                            column: stmt.column,
+                        });
+                    }
+                }
+                Ok(None)
+            }
             _ => { Ok(None) }
         }
     }
     
-    pub fn evaluate_expression(&self, expression: &Expression, env: &Rc<RefCell<Environment>>) -> Result<Value, RuntimeError> {
+    pub fn evaluate_expression(&mut self, expression: &Expression, env: &Env) -> Result<Value, RuntimeError> {
         match expression.expression_type {
             ExpressionType::BinaryOp{ref left, ref op, ref right} => {
                 let left_v = self.evaluate_expression(left, env)?;
@@ -620,7 +701,7 @@ impl Interpreter {
         }
     }
 
-    pub fn run_function(&self, fn_stmt: Rc<Statement>, args: Vec<Value>, prev_env: &Rc<RefCell<Environment>>) -> Result<Value, RuntimeError> {
+    pub fn run_function(&mut self, fn_stmt: Rc<Statement>, args: Vec<Value>, prev_env: &Env) -> Result<Value, RuntimeError> {
         let fn_env = Environment::new(Some(prev_env.clone()));
         let fn_env_rc = Rc::new(RefCell::new(fn_env));
         match fn_stmt.statement_type {
@@ -678,7 +759,7 @@ impl Interpreter {
         }
     }
 
-    pub fn run_body(&self, block: &Statement, prev_env: &Rc<RefCell<Environment>>) -> Result<Option<Value>, RuntimeError> {
+    pub fn run_body(&mut self, block: &Statement, prev_env: &Env) -> Result<Option<Value>, RuntimeError> {
         let bd_env = Environment::new(Some(prev_env.clone()));
         let rc = Rc::new(RefCell::new(bd_env));
         match block.statement_type {
@@ -788,7 +869,7 @@ impl Interpreter {
         }
         Ok(None)
     }
-    pub fn iter_body(&self, body: &Vec<Statement>, env: &Rc<RefCell<Environment>>) -> Result<Option<Value>, RuntimeError> {
+    pub fn iter_body(&mut self, body: &Vec<Statement>, env: &Rc<RefCell<Environment>>) -> Result<Option<Value>, RuntimeError> {
         for stmt in body.iter() {
             let r = self.run_statement(stmt, env)?;
             if let Some(r) = r {

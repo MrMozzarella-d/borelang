@@ -1,3 +1,5 @@
+import math
+
 const BEST_NUMBER = 42
 const ITERATIONS = 5
 let iterations = 0
@@ -26,3 +28,4 @@ while j < 50 {
     println("True is true")
     j += 1
 }
+println("Pi is ", math.PI, " and abs of 2 is ", math.i_abs(2))

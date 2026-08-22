@@ -550,26 +550,27 @@ impl Parser {
         let line = i.line;
         let column = i.column;
         let mut mods = Vec::new();
-        'parent: while self.current < self.tokens.len() {
-            match self.peek()?.token_data {
-                TokenData::Comma => {
-                    self.expect(TokenData::Comma)?;
-                    let i = self.expect_literal()?;
-                    if i.as_str() == "import" {
-                        return Err(SyntaxError {
-                            error_type: SyntaxErrorType::ExpectedLiteral(
-                                "module name".to_string(),
-                                i,
-                            ),
-                            line,
-                            column,
-                        });
-                    }
-                    mods.push(i);
-                }
-                _ => break 'parent,
-            }
-        }
+        // 'parent: while self.current < self.tokens.len() {
+        //     match self.peek()?.token_data {
+        //         TokenData::Comma => {
+        //             self.expect(TokenData::Comma)?;
+        //             let i = self.expect_literal()?;
+        //             if i.as_str() == "import" {
+        //                 return Err(SyntaxError {
+        //                     error_type: SyntaxErrorType::ExpectedLiteral(
+        //                         "module name".to_string(),
+        //                         i,
+        //                     ),
+        //                     line,
+        //                     column,
+        //                 });
+        //             }
+        //             mods.push(i);
+        //         }
+        //         _ => break 'parent,
+        //     }
+        // }
+        mods.push(self.expect_literal()?);
         let stmt = StatementType::Import { mods };
         Ok(Statement {
             statement_type: stmt,

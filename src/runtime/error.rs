@@ -68,7 +68,10 @@ pub enum RuntimeErrorType {
     UnexpectedToken(TokenData),
     AttemptToChangeConstantVar(String),
     FnReturnsWrongType(String, TypeRule, Type),
-    AttemptToUseUnaryOnWrongType(TokenData, Type)
+    AttemptToUseUnaryOnWrongType(TokenData, Type),
+    ModuleAlreadyImported(String),
+    ModuleNotFound(String),
+    ImportedModuleDoesntHaveInitFunction(String),
 }
 #[derive(Debug)]
 pub struct RuntimeError {
@@ -136,7 +139,16 @@ impl Display for RuntimeError {
                 }
             }
             RuntimeErrorType::AttemptToUseUnaryOnWrongType(ref op, ref ty) => {
-                write!(f, "\x1b[31mRuntime Error\x1b[0m: Attempt to use unary '{:?}' on type '{:?}'", op, ty)
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Attempt to use unary '{:?}' on type '{:?}' ({}:{})", op, ty, self.line, self.column)
+            }
+            RuntimeErrorType::ModuleAlreadyImported(ref name) => {
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Module '{}' already imported ({}:{})", name, self.line, self.column)
+            }
+            RuntimeErrorType::ModuleNotFound(ref name) => {
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Module '{}' not found ({}:{})", name, self.line, self.column)
+            }
+            RuntimeErrorType::ImportedModuleDoesntHaveInitFunction(ref name) => {
+                write!(f, "\x1b[31mRuntime Error\x1b[0m: Couldn't find an init function for module '{}' ({}:{})", name, self.line, self.column)
             }
         }
     }

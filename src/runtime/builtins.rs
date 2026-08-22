@@ -10,12 +10,12 @@ use crate::runtime::interpreter::{TypeRule, Value, Type};
 pub fn init_module() -> Module {
     let mut fields: HashMap<String, Value> = HashMap::new();
     fields.insert("println".to_string(), Value::RustFunction {
-        func: _println, 
-        params: vec![TypeRule::Any], 
+        func: _println,
+        params: vec![TypeRule::Any],
         ret_type: TypeRule::Explicit(Type::Null)
     });
     fields.insert("print".to_string(), Value::RustFunction {
-        func: _print, 
+        func: _print,
         params: vec![TypeRule::Any],
         ret_type: TypeRule::Explicit(Type::Null)
     });
