@@ -1,20 +1,9 @@
 #![feature(duration_millis_float)]
-extern crate core;
-
 use std::fs::OpenOptions;
 use std::io::Read;
-use crate::lexer::Lexer;
-use crate::parser::Parser;
 
-mod error;
-mod interpreter;
-mod lexer;
-mod node;
-mod parser;
-mod token;
-
-mod builtins;
-mod primitive;
+use borelang::runtime::interpreter::Interpreter;
+use borelang::syntax::{lexer::Lexer, parser::Parser};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     //println!("hello!");
@@ -45,7 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let time_interpret = std::time::SystemTime::now();
         let map = statements_res.map(|v| v).unwrap();
 
-        let mut interpreter = interpreter::Interpreter::new(map);
+        let mut interpreter = Interpreter::new(map);
         if let Err(e) = interpreter.run() {
             eprintln!("{}", e);
         }

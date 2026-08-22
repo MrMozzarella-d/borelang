@@ -1,19 +1,18 @@
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::error::RuntimeErrorType;
-use crate::interpreter::{Type, TypeRule, Value};
+use crate::runtime::{ interpreter::{Type, TypeRule, Value} };
 
-fn _tostr(args: Vec<Value>) -> Result<Value, RuntimeErrorType> {
+fn _tostr(args: Vec<Value>) -> Value {
     let this = &args[0];
     if let Value::Int(v) = this {
-        Ok(Value::Str(Rc::new(format!("{}", v)))).into()
+        Value::Str(Rc::new(format!("{}", v)))
     } else { unreachable!() }
 }
 
-fn _tofloat(args: Vec<Value>) -> Result<Value, RuntimeErrorType> {
+fn _tofloat(args: Vec<Value>) -> Value {
     let this = &args[0];
     if let Value::Int(v) = this {
-        Ok(Value::Float(*v as f64))
+        Value::Float(*v as f64)
     } else { unreachable!() }
 }
 

@@ -2,10 +2,13 @@ use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::{builtins, primitive};
-use crate::error::{RuntimeError, RuntimeErrorType};
-use crate::node::{Statement, StatementType, ExpressionType, Expression};
-use crate::token::TokenData;
+
+use crate::runtime::{builtins, error};
+use error::{RuntimeError, RuntimeErrorType};
+use crate::primitive;
+
+use crate::syntax::node::{Statement, StatementType, ExpressionType, Expression};
+use crate::syntax::token::TokenData;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -21,7 +24,7 @@ pub enum Value {
     },
     BoreFunction(Rc<Statement>),
     RustFunction {
-        func: fn(args: Vec<Value>) -> Result<Value, RuntimeErrorType>,
+        func: fn(args: Vec<Value>) -> Value,
         params: Vec<TypeRule>,
         ret_type: TypeRule,
     },
@@ -31,6 +34,7 @@ pub enum Value {
     },
     Null,
 }
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     UInt,
@@ -227,20 +231,17 @@ impl Interpreter {
     pub fn run(&mut self) -> Result<(), RuntimeError> {
         let mut global_env = Environment::new(None);
         // built-ins module
-        let builtins = builtins::Module::new();
-        match builtins.obj {
-            Value::Object { name: _, fields } => {
-                for field in fields.borrow().iter() {
-                    let var = Variable {
-                        is_mutable: false,
-                        type_rule: TypeRule::Any,
-                        value: field.1.clone(),
-                    };
-                    let v = global_env.define(field.0, var);
-                    self.comply_def_err(v, 1, 0)?;
-                }
+        let builtins = builtins::init_module();
+        if let Value::Object { fields, .. } = &builtins.obj {
+            for (name, value) in fields.borrow().iter() {
+                let var = Variable {
+                    is_mutable: false,
+                    type_rule: TypeRule::Any,
+                    value: value.clone(),
+                };
+                let v = global_env.define(name, var);
+                self.comply_def_err(v, 1, 0)?;
             }
-            _ => {} // this CANNOT happen
         }
         // pre-register of all functions
         for stmt in self.ast.iter() {
@@ -589,28 +590,13 @@ impl Interpreter {
                         v
                     },
                     Value::RustFunction { func, .. } => {
-                        func(arg_v)
-                            .map_err(|ty| RuntimeError {
-                                error_type: ty,
-                                line: callee.line,
-                                column: callee.column,
-                            })
+                        Ok(func(arg_v))
                     },
                     Value::BoundMethod { this, func } => {
                         arg_v.insert(0, *this);
                         match *func {
                             Value::RustFunction { func, .. } => {
-                                let v = func(arg_v);
-                                if let Err(e) = v {
-                                    Err(RuntimeError {
-                                        error_type: e,
-                                        line: callee.line,
-                                        column: callee.column,
-                                    })
-                                } else {
-                                    let res = v.unwrap();
-                                    Ok(res)
-                                }
+                                 Ok(func(arg_v))
                             }
                             Value::BoreFunction(func) => {
                                 let v = self.run_function(func, arg_v, env);

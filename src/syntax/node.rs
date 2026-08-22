@@ -1,6 +1,6 @@
 use phf::phf_map;
-use crate::interpreter::{Type, TypeRule};
-use crate::token::{Token};
+use crate::runtime::interpreter::{Type, TypeRule};
+use crate::syntax::token::{Token};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExpressionType {

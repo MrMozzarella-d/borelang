@@ -1,5 +1,5 @@
-use crate::token;
-use crate::token::{Token, TokenData};
+use crate::syntax::token;
+use token::{Token, TokenData};
 
 pub struct Lexer<'a> {
     source: &'a str,

@@ -53,8 +53,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "borelang4"
-version = "0.1.0"
+name = "borelang"
+version = "0.0.3"
 dependencies = [
  "clap",
  "log",

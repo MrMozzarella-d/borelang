@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
-use crate::interpreter::{Type, TypeRule, Value};
-use crate::token::TokenData;
+use crate::{Type, TypeRule, Value};
+use crate::syntax::token::TokenData;
 
 #[derive(Debug)]
 pub enum SyntaxErrorType {

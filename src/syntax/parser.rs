@@ -1,7 +1,7 @@
-use crate::error::{SyntaxError, SyntaxErrorType};
-use crate::interpreter::{Type, TypeRule};
-use crate::node::{Expression, ExpressionType, Statement, StatementType, PRIMITIVES};
-use crate::token::{Token, TokenData};
+use crate::runtime::error::{SyntaxError, SyntaxErrorType};
+use crate::syntax::node::{Expression, ExpressionType, Statement, StatementType, PRIMITIVES};
+use crate::syntax::token::{Token, TokenData};
+use crate::{Type, TypeRule};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -88,7 +88,7 @@ impl Parser {
             })
         }
     }
-    pub(crate) fn parse(&mut self) -> Result<Vec<Statement>, SyntaxError> {
+    pub fn parse(&mut self) -> Result<Vec<Statement>, SyntaxError> {
         let mut statement_vec: Vec<Statement> = Vec::new();
         while self.current < self.tokens.len() {
             if let Ok(token) = self.peek() {
@@ -505,11 +505,11 @@ impl Parser {
         let start = self.parse_expression(0)?;
         self.expect(TokenData::Range)?;
         let end = self.parse_expression(0)?;
-        let mut step = Expression {
-            expression_type: ExpressionType::Integer(1),
-            line: end.line,
-            column: end.column,
-        };
+        // let mut step = Expression {
+        //     expression_type: ExpressionType::Integer(1),
+        //     line: end.line,
+        //     column: end.column,
+        // };
         // if self.peek()?.token_data == TokenData::Literal("with".to_string()) { 
         //     self.expect_literal()?;
         //     let expr = self.parse_expression(0)?;

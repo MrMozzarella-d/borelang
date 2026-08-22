@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::interpreter::{Type, Value};
+use crate::{Type, Value};
 
 mod int;
 mod float;
